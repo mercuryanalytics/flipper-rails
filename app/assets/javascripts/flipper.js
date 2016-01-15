@@ -6,7 +6,7 @@ define(["exports"], function (exports) {
   });
   exports.default = flipbook;
 
-  var _slicedToArray = (function () {
+  var _slicedToArray = function () {
     function sliceIterator(arr, i) {
       var _arr = [];
       var _n = true;
@@ -42,7 +42,7 @@ define(["exports"], function (exports) {
         throw new TypeError("Invalid attempt to destructure non-iterable instance");
       }
     };
-  })();
+  }();
 
   var CLICK_THRESHOLD = 250;
   var SPOTSIZE = 60;
