@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>flipper</title>
+    <style>
+      body { padding-top: 1in; color: #333; background: #ddd; }
+    </style>
+    <script src="https://cdn.polyfill.io/v2/polyfill.min.js?features=default,fetchrequestAnimationFrame,Math.hypot,Promise,CustomEvent"></script>
+    <script src="node_modules/requirejs/require.js"></script>
+    <script>
+      require.config({ baseUrl: '/app/assets/javascripts' });
+
+      var images = ['images/wired/page0.png', 'images/wired/page1.png', 'images/wired/page2.png', 'images/wired/page3.png', 'images/wired/page4.png', 'images/wired/page5.png', 'images/wired/page6.png', 'images/wired/page7.png', 'images/wired/page8.png', 'images/wired/page9.png'];
+      document.addEventListener("DOMContentLoaded", function() {
+        require(["flipper"], function(flipper) {
+          flipper.default(document.querySelector('#flipbook'), images);
+        });
+      }, false);
+    </script>
+  </head>
+  <body>
+    <div id='flipbook'></div>
+    <script>
+      document.querySelector('#flipbook').addEventListener("flipbook:pagechange", function(event) {
+        if (event.detail.lastPage) alert("Last page");
+      }, false);
+    </script>
+  </body>
+</html>
