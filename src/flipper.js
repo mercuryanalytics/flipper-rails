@@ -1,7 +1,6 @@
 "use strict";
 const CLICK_THRESHOLD = 250;
 const SPOTSIZE = 60;
-const EMBEDDING_SCALE = 0.8;
 
 function linear(min, max) { return (x) => min + x * (max - min); }
 
@@ -16,10 +15,10 @@ function loadImage(uri) {
 }
 
 function computeEmbedSize(image, scale) {
-  if (scale <= 0) return [image.naturalWidth, image.naturalHeight];
+  if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight];
 
-  let availableWidth = scale * (screen.availWidth - Math.max(window.outerWidth - window.innerWidth, 0));
-  let availableHeight = scale * (screen.availHeight - Math.max(window.outerHeight - window.innerHeight, 0));
+  let availableWidth = scale * (screen.width - Math.max(window.outerWidth - window.innerWidth, 0));
+  let availableHeight = scale * (screen.width - Math.max(window.outerHeight - window.innerHeight, 0));
   if ('orientation' in window && ((window.orientation / 90) & 1) == 1) [availableWidth, availableHeight] = [availableHeight, availableWidth];
 
   const aspect = (2*image.naturalWidth) / image.naturalHeight;
@@ -303,11 +302,12 @@ function createRenderer(width, height, canvas) {
 
 function loadImages(uris) { return uris.map((uri) => loadImage(uri)); };
 
-export default function flipbook(book, imageURIs) {
+export default function flipper(book, imageURIs, options = {}) {
+  options = Object.assign({ scale: 0.8 }, options);
   const canvas = book.appendChild(document.createElement("canvas"));
   return Promise.all(loadImages(imageURIs))
     .then(function(images) {
-      const [W, H] = computeEmbedSize(images[0], EMBEDDING_SCALE);
+      const [W, H] = computeEmbedSize(images[0], options.scale);
       const render = createRenderer(W, H, canvas);
       let currentPage = 0;
       let leftPage = images[currentPage-1];
@@ -350,7 +350,7 @@ export default function flipbook(book, imageURIs) {
               currentPage += 2*corner.direction;
               leftPage = images[currentPage-1];
               rightPage = images[currentPage];
-              book.dispatchEvent(new CustomEvent("flipbook:pagechange", { detail: { currentPage, lastPage: !images[currentPage+1] }}))
+              book.dispatchEvent(new CustomEvent("mercury:pagechange", { detail: { currentPage, lastPage: !images[currentPage+1] }}))
             }
             return render(leftPage, rightPage);
           })
