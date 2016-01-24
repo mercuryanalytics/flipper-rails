@@ -8,7 +8,7 @@ gulp.task('watch', () => {
 
 gulp.task('default', () => {
   return gulp.src(['src/flipper.js'])
-    .pipe(babel({ presets: ['es2015'], plugins: ["transform-es2015-modules-amd"] }))
+    .pipe(babel({ presets: ['es2015'], plugins: ["transform-es2015-modules-umd"] }))
     .pipe(concat('flipper.js'))
     .pipe(gulp.dest('app/assets/javascripts'));
 });
