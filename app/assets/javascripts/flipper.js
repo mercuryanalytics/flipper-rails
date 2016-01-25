@@ -590,6 +590,8 @@
         };
       }
 
+      var animating = false;
+
       function dropCorner(corner, moveListener, timeStamp) {
         var listener = function listener(event) {
           event.preventDefault();
@@ -601,12 +603,18 @@
           var target = undefined;
 
           if (event.timeStamp - timeStamp < CLICK_THRESHOLD) {
+            if (animating || newPage) return;
+            var newPage = currentPage + 2 * corner.direction;
+            if (newPage < 0 || newPage > images.length) return;
             target = render.oppositeCorner(mouse);
           } else {
             target = render.nearestCorner(mouse);
           }
 
+          animating = true;
           return animate(dropAnimation(mouse, target, corner, leftPage, rightPage, incomingLeftPage, incomingRightPage), 300).then(function () {
+            animating = false;
+
             if (target !== corner) {
               currentPage += 2 * corner.direction;
               leftPage = images[currentPage - 1];

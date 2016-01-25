@@ -330,6 +330,7 @@ export default function flipper(book, imageURIs, options = {}) {
         };
       }
 
+      let animating = false;
       function dropCorner(corner, moveListener, timeStamp) {
         const listener = function(event) {
           event.preventDefault();
@@ -337,23 +338,29 @@ export default function flipper(book, imageURIs, options = {}) {
           document.removeEventListener("touchmove", moveListener);
           document.removeEventListener("mouseup", listener);
           document.removeEventListener("touchend", listener);
-          // TODO maybe: document.removeEventListener("touchcancel", listener);
+
           const mouse = render.toLocalCoordinates(event);
           let target = undefined;
           if (event.timeStamp - timeStamp < CLICK_THRESHOLD) {
+            if (animating || newPage) return;
+            const newPage = currentPage + 2*corner.direction;
+            if (newPage < 0 || newPage > images.length) return;
             target = render.oppositeCorner(mouse);
           } else {
             target = render.nearestCorner(mouse);
           }
-          return animate(dropAnimation(mouse, target, corner, leftPage, rightPage, incomingLeftPage, incomingRightPage), 300).then(function() {
-            if (target !== corner) {
-              currentPage += 2*corner.direction;
-              leftPage = images[currentPage-1];
-              rightPage = images[currentPage];
-              book.dispatchEvent(new CustomEvent("mercury:pagechange", { detail: { currentPage, lastPage: !images[currentPage+1] }}))
-            }
-            return render(leftPage, rightPage);
-          })
+          animating = true;
+          return animate(dropAnimation(mouse, target, corner, leftPage, rightPage, incomingLeftPage, incomingRightPage), 300)
+            .then(() => {
+              animating = false;
+              if (target !== corner) {
+                currentPage += 2*corner.direction;
+                leftPage = images[currentPage-1];
+                rightPage = images[currentPage];
+                book.dispatchEvent(new CustomEvent("mercury:pagechange", { detail: { currentPage, lastPage: !images[currentPage+1] }}))
+              }
+              return render(leftPage, rightPage);
+            })
         };
         return listener;
       }
