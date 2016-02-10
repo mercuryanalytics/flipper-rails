@@ -1,6 +1,6 @@
 (function (global, factory) {
   if (typeof define === "function" && define.amd) {
-    define(["exports"], factory);
+    define(['exports'], factory);
   } else if (typeof exports !== "undefined") {
     factory(exports);
   } else {
@@ -57,12 +57,27 @@
   }();
 
   var CLICK_THRESHOLD = 250;
-  var SPOTSIZE = 60;
 
   function linear(min, max) {
     return function (x) {
       return min + x * (max - min);
     };
+  }
+
+  function iterate(o, fn) {
+    return Object.keys(o).forEach(function (k) {
+      return fn(k, o[k]);
+    });
+  }
+
+  function shapeSelector(kit, shape) {
+    switch (shape) {
+      case 'circle':
+        return kit.circle;
+
+      default:
+        return kit.rectangle;
+    }
   }
 
   function computeEmbedSize(image, scale) {
@@ -110,7 +125,7 @@
     });
   }
 
-  function createRenderer(width, height, canvas) {
+  function createRenderer(width, height, canvas, dataset) {
     var w = width;
     var h = height;
     var h2 = h / 2;
@@ -433,12 +448,58 @@
       var tx = to.x;
       var ty = to.y;
       var result = ctx.createLinearGradient(fx, fy, fx + strength * (tx - fx), fy + strength * (ty - fy));
-      result.addColorStop(0, "rgba(0,0,0," + mid.toFixed(4) + ")");
+      result.addColorStop(0, 'rgba(0,0,0,' + mid.toFixed(4) + ')');
       result.addColorStop(1, "rgba(0,0,0,0)");
       return result;
     }
 
-    function renderOverleaf(ctx, corner, mouseX, mouseY, leftImage, rightImage) {
+    var shapeRenderers = {
+      circle: function circle(ctx, x0, coords) {
+        var _coords = _slicedToArray(coords, 3);
+
+        var x = _coords[0];
+        var y = _coords[1];
+        var r = _coords[2];
+        ctx.arc(x0 + x, y - h2, r, 0, 2 * Math.PI, false);
+      },
+      rectangle: function rectangle(ctx, x0, coords) {
+        var _coords2 = _slicedToArray(coords, 4);
+
+        var x1 = _coords2[0];
+        var y1 = _coords2[1];
+        var x2 = _coords2[2];
+        var y2 = _coords2[3];
+        ctx.rect(x0 + x1, y1 - h2, x2 - x1, y2 - y1);
+      }
+    };
+
+    function renderAreas(map, ctx, x) {
+      function shapeStyle(s) {
+        if (dataset.hover[s]) return "rgba(0,255,0,0.5)";
+        if (dataset.selection[s]) return "rgba(255,0,0,0.5)";
+        return "rgba(0,0,0,0.5)";
+      }
+
+      var renderer = function renderer(r) {
+        return function (ctx, x, coords, style) {
+          ctx.save();
+          ctx.fillStyle = style;
+          ctx.beginPath();
+          r(ctx, x, coords);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        };
+      };
+
+      iterate(map, function (name, areas) {
+        return areas.forEach(function (area) {
+          return renderer(shapeSelector(shapeRenderers, area.shape))(ctx, x, area.coords, shapeStyle(name));
+        });
+      });
+    }
+
+    function renderOverleaf(ctx, corner, mouseX, mouseY, leftImage, rightImage, leftMap, rightMap) {
       var _calculateLeafGeometr = calculateLeafGeometry(mouseX, mouseY, corner);
 
       var x = _calculateLeafGeometr.x;
@@ -470,7 +531,14 @@
       back(ctx);
       ctx.closePath();
       ctx.clip();
-      if (rightImage != null) ctx.drawImage(rightImage, corner.backX, -h2, w, h);else ctx.clearRect(corner.backX, -h2, w, h);
+
+      if (rightImage) {
+        ctx.drawImage(rightImage, corner.backX, -h2, w, h);
+        renderAreas(rightMap.map, ctx, corner.backX);
+      } else {
+        ctx.clearRect(corner.backX, -h2, w, h);
+      }
+
       ctx.fillStyle = gradient(ctx, {
         x: mx,
         y: my
@@ -484,6 +552,7 @@
       ctx.closePath();
       ctx.clip();
       ctx.drawImage(leftImage, -w, -h2, w, h);
+      renderAreas(leftMap.map, ctx, -w);
       rx(ctx);
       ctx.fillStyle = gradient(ctx, {
         x: mx,
@@ -496,7 +565,7 @@
       ctx.restore();
     }
 
-    function renderPage(ctx, image, x, dir) {
+    function renderPage(ctx, image, map, x, dir) {
       ctx.drawImage(image, x, -h2, w, h);
       ctx.beginPath();
       ctx.moveTo(0, -h2);
@@ -504,6 +573,7 @@
       ctx.lineTo(dir, h2);
       ctx.lineTo(dir, -h2);
       ctx.closePath();
+      renderAreas(map, ctx, x);
       ctx.fillStyle = gradient(ctx, {
         x: 0,
         y: 0
@@ -514,14 +584,14 @@
       ctx.fill();
     }
 
-    function renderer(left, right, corner, x, y, backLeft, backRight) {
+    function renderer(left, right, leftMap, rightMap, corner, x, y, backLeft, backRight, backLeftMap, backRightMap) {
       var ctx = canvas.getContext("2d");
       ctx.save();
       ctx.translate(w, topMargin + h2);
       ctx.clearRect(-w, -h2 - topMargin, 2 * w, h + topMargin + bottomMargin);
-      if (left) renderPage(ctx, left, -w, -w);
-      if (right) renderPage(ctx, right, 0, w);
-      if (corner) renderOverleaf(ctx, corner, x, y, backLeft, backRight);
+      if (left) renderPage(ctx, left, leftMap.map, -w, -w);
+      if (right) renderPage(ctx, right, rightMap.map, 0, w);
+      if (corner) renderOverleaf(ctx, corner, x, y, backLeft, backRight, backLeftMap, backRightMap);
       ctx.restore();
     }
 
@@ -547,16 +617,23 @@
 
   function loadImages(pages) {
     return pages.map(function (page) {
-      return loadImage(typeof page === 'string' ? page : page.image);
+      return loadImage(page.image);
     });
   }
 
   ;
 
-  function flipper(book, pages) {
-    var options = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
+  function flipper(book, pages, data) {
+    var options = arguments.length <= 3 || arguments[3] === undefined ? {} : arguments[3];
+    pages = pages.map(function (page) {
+      return typeof page === 'string' ? {
+        image: page,
+        map: []
+      } : page;
+    });
     options = Object.assign({
-      scale: 0.8
+      scale: 0.8,
+      spotsize: 0.08
     }, options);
     var canvas = book.appendChild(document.createElement("canvas"));
     return Promise.all(loadImages(pages)).then(function (images) {
@@ -566,19 +643,28 @@
 
       var W = _computeEmbedSize2[0];
       var H = _computeEmbedSize2[1];
-      var render = createRenderer(W, H, canvas);
+      var spotsize = W * options.spotsize;
+      var dataset = {
+        selection: data,
+        hover: {}
+      };
+      var render = createRenderer(W, H, canvas, dataset);
       var currentPage = 0;
       var leftPage = images[currentPage - 1];
       var rightPage = images[currentPage];
+      var leftMap = pages[currentPage - 1];
+      var rightMap = pages[currentPage];
       var incomingLeftPage = null;
       var incomingRightPage = null;
-      render(leftPage, rightPage);
+      var incomingLeftMap = null;
+      var incomingRightMap = null;
+      render(leftPage, rightPage, leftMap, rightMap);
 
-      function dropAnimation(mouse, target, corner, leftPage, rightPage, incomingLeftPage, incomingRightPage) {
+      function dropAnimation(mouse, target, corner, leftPage, rightPage, leftMap, rightMap, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap) {
         var scaleX = linear(mouse.x, target.x);
         var scaleY = linear(mouse.y, target.y);
         return function (a) {
-          return render(leftPage, rightPage, corner, scaleX(a), scaleY(a), incomingLeftPage, incomingRightPage);
+          return render(leftPage, rightPage, leftMap, rightMap, corner, scaleX(a), scaleY(a), incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap);
         };
       }
 
@@ -586,7 +672,7 @@
         return function (event) {
           event.preventDefault();
           var mouse = render.toLocalCoordinates(event);
-          return render(images[currentPage - 1], images[currentPage], corner, mouse.x, mouse.y, incomingLeftPage, incomingRightPage);
+          return render(images[currentPage - 1], images[currentPage], pages[currentPage - 1], pages[currentPage], corner, mouse.x, mouse.y, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap);
         };
       }
 
@@ -612,13 +698,15 @@
           }
 
           animating = true;
-          return animate(dropAnimation(mouse, target, corner, leftPage, rightPage, incomingLeftPage, incomingRightPage), 300).then(function () {
+          return animate(dropAnimation(mouse, target, corner, leftPage, rightPage, leftMap, rightMap, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap), 300).then(function () {
             animating = false;
 
             if (target !== corner) {
               currentPage += 2 * corner.direction;
               leftPage = images[currentPage - 1];
               rightPage = images[currentPage];
+              leftMap = pages[currentPage - 1];
+              rightMap = pages[currentPage];
               book.dispatchEvent(new CustomEvent("mercury:pagechange", {
                 detail: {
                   currentPage: currentPage,
@@ -627,7 +715,7 @@
               }));
             }
 
-            return render(leftPage, rightPage);
+            return render(leftPage, rightPage, leftMap, rightMap);
           });
         };
 
@@ -637,7 +725,7 @@
       function hotspot(mx, my) {
         var x = Math.abs(mx);
         var y = Math.abs(my);
-        return W - SPOTSIZE <= x && x <= W && H / 2 - SPOTSIZE <= y && y <= H / 2;
+        return W - spotsize <= x && x <= W && H / 2 - spotsize <= y && y <= H / 2;
       }
 
       function animateCorner(mouse) {
@@ -650,9 +738,13 @@
           if (direction < 0) {
             incomingLeftPage = images[newPage];
             incomingRightPage = images[newPage - 1];
+            incomingLeftMap = pages[newPage];
+            incomingRightMap = pages[newPage - 1];
           } else {
             incomingLeftPage = images[newPage - 1];
             incomingRightPage = images[newPage];
+            incomingLeftMap = pages[newPage - 1];
+            incomingRightMap = pages[newPage];
           }
 
           var onMouseMove = dragCorner(corner);
@@ -661,7 +753,7 @@
           var onMouseUp = dropCorner(corner, onMouseMove, mouse.timeStamp);
           document.addEventListener("mouseup", onMouseUp, false);
           document.addEventListener("touchend", onMouseUp, false);
-          render(images[currentPage - 1], images[currentPage], corner, mouse.x, mouse.y, incomingLeftPage, incomingRightPage);
+          render(images[currentPage - 1], images[currentPage], pages[currentPage - 1], pages[currentPage], corner, mouse.x, mouse.y, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap);
         }
       }
 
@@ -672,6 +764,55 @@
       book.addEventListener("touchstart", function (event) {
         event.preventDefault();
         animateCorner(render.toLocalCoordinates(event));
+      });
+      var hitTesters = {
+        circle: function circle(mouse, coords) {
+          var _coords3 = _slicedToArray(coords, 3);
+
+          var x = _coords3[0];
+          var y = _coords3[1];
+          var r = _coords3[2];
+          return Math.hypot(mouse.x - x, mouse.y - y) <= r;
+        },
+        rectangle: function rectangle(mouse, coords) {
+          var _coords4 = _slicedToArray(coords, 4);
+
+          var x1 = _coords4[0];
+          var y1 = _coords4[1];
+          var x2 = _coords4[2];
+          var y2 = _coords4[3];
+          return x1 <= mouse.x && mouse.x <= x2 && y1 <= mouse.y && mouse.y <= y2;
+        }
+      };
+      book.addEventListener("mousemove", function (event) {
+        var changed = false;
+
+        var hitTester = function hitTester(mouse) {
+          return function (name, areas) {
+            return areas.forEach(function (area) {
+              if (shapeSelector(hitTesters, area.shape)(mouse, area.coords)) {
+                if (!dataset.hover[name]) {
+                  console.log("over", name);
+                  dataset.hover[name] = true;
+                  changed = true;
+                }
+              } else {
+                if (dataset.hover[name]) {
+                  console.log("out", name);
+                  dataset.hover[name] = false;
+                  changed = true;
+                }
+              }
+            });
+          };
+        };
+
+        var mouse = render.toLocalCoordinates(event);
+        mouse.y += H / 2;
+        if (pages[currentPage]) iterate(pages[currentPage].map, hitTester(mouse));
+        mouse.x += W;
+        if (pages[currentPage - 1]) iterate(pages[currentPage - 1].map, hitTester(mouse));
+        if (changed) render(leftPage, rightPage, leftMap, rightMap);
       });
     });
   }

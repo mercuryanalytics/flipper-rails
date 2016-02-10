@@ -1,8 +1,15 @@
 "use strict";
 const CLICK_THRESHOLD = 250;
-const SPOTSIZE = 60;
 
 function linear(min, max) { return (x) => min + x * (max - min); }
+function iterate(o, fn) { return Object.keys(o).forEach((k) => fn(k, o[k])); }
+
+function shapeSelector(kit, shape) {
+  switch (shape) {
+    case 'circle': return kit.circle;
+    default: return kit.rectangle;
+  }
+}
 
 function computeEmbedSize(image, scale) {
   if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight];
@@ -38,7 +45,7 @@ function animate(renderFrame, duration) {
   })
 }
 
-function createRenderer(width, height, canvas) {
+function createRenderer(width, height, canvas, dataset) {
   const w = width;
   const h = height;
   const h2 = h/2;
@@ -154,7 +161,6 @@ function createRenderer(width, height, canvas) {
     }
   }
 
-
   function oppositeCorner(pt) {
     if (pt.x < 0) {
       if (pt.y < 0)
@@ -222,7 +228,39 @@ function createRenderer(width, height, canvas) {
     return result;
   }
 
-  function renderOverleaf(ctx, corner, mouseX, mouseY, leftImage, rightImage) {
+  const shapeRenderers = {
+    circle(ctx, x0, coords) {
+      const [x,y,r] = coords;
+      ctx.arc(x0 + x, y - h2, r, 0, 2*Math.PI, false);
+    },
+
+    rectangle(ctx, x0, coords) {
+      const [x1,y1,x2,y2] = coords;
+      ctx.rect(x0 + x1, y1 - h2, x2 - x1, y2 - y1);
+    }
+  }
+
+  function renderAreas(map, ctx, x) {
+    function shapeStyle(s) {
+      if (dataset.hover[s]) return "rgba(0,255,0,0.5)";
+      if (dataset.selection[s]) return "rgba(255,0,0,0.5)";
+      return "rgba(0,0,0,0.5)";
+    }
+
+    const renderer = (r) => (ctx, x, coords, style) => {
+      ctx.save();
+      ctx.fillStyle = style;
+      ctx.beginPath();
+      r(ctx, x, coords);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    };
+
+    iterate(map, (name, areas) => areas.forEach((area) => renderer(shapeSelector(shapeRenderers, area.shape))(ctx, x, area.coords, shapeStyle(name))));
+  }
+
+  function renderOverleaf(ctx, corner, mouseX, mouseY, leftImage, rightImage, leftMap, rightMap) {
     const { x, y, tx, rx, leaf, back, page } = calculateLeafGeometry(mouseX, mouseY, corner);
     const cx = corner.x;
     const cy = corner.y;
@@ -241,10 +279,12 @@ function createRenderer(width, height, canvas) {
     back(ctx);
     ctx.closePath();
     ctx.clip();
-    if (rightImage != null)
+    if (rightImage) {
       ctx.drawImage(rightImage, corner.backX, -h2, w, h);
-    else
+      renderAreas(rightMap.map, ctx, corner.backX);
+    } else {
       ctx.clearRect(corner.backX, -h2, w, h);
+    }
     ctx.fillStyle = gradient(ctx, {x:mx, y:my}, corner, reach);
     ctx.fill();
     ctx.restore();
@@ -255,13 +295,14 @@ function createRenderer(width, height, canvas) {
     ctx.closePath();
     ctx.clip();
     ctx.drawImage(leftImage, -w, -h2, w, h);
+    renderAreas(leftMap.map, ctx, -w);
     rx(ctx);
     ctx.fillStyle = gradient(ctx, {x:mx, y:my}, {x:x, y:y}, reach, .2);
     ctx.fill();
     ctx.restore();
   }
 
-  function renderPage(ctx, image, x, dir) {
+  function renderPage(ctx, image, map, x, dir) {
     ctx.drawImage(image, x, -h2, w, h);
     ctx.beginPath();
     ctx.moveTo(0, -h2);
@@ -269,18 +310,19 @@ function createRenderer(width, height, canvas) {
     ctx.lineTo(dir, h2);
     ctx.lineTo(dir, -h2);
     ctx.closePath();
+    renderAreas(map, ctx, x);
     ctx.fillStyle = gradient(ctx, {x:0, y:0}, {x:dir, y:0}, .1, .05);
     ctx.fill();
   }
 
-  function renderer(left, right, corner, x, y, backLeft, backRight) {
+  function renderer(left, right, leftMap, rightMap, corner, x, y, backLeft, backRight, backLeftMap, backRightMap) {
     const ctx = canvas.getContext("2d");
     ctx.save();
     ctx.translate(w, topMargin + h2);
     ctx.clearRect(-w, -h2 - topMargin, 2*w, h + topMargin + bottomMargin);
-    if (left) renderPage(ctx, left, -w, -w)
-    if (right) renderPage(ctx, right, 0, w)
-    if (corner) renderOverleaf(ctx, corner, x, y, backLeft, backRight);
+    if (left) renderPage(ctx, left, leftMap.map, -w, -w)
+    if (right) renderPage(ctx, right, rightMap.map, 0, w)
+    if (corner) renderOverleaf(ctx, corner, x, y, backLeft, backRight, backLeftMap, backRightMap);
     ctx.restore();
   }
 
@@ -300,33 +342,40 @@ function loadImage(uri) {
   });
 }
 
-function loadImages(pages) { return pages.map((page) => loadImage(typeof page === 'string' ? page : page.image)); };
+function loadImages(pages) { return pages.map((page) => loadImage(page.image)); };
 
-export default function flipper(book, pages, options = {}) {
-  options = Object.assign({ scale: 0.8 }, options);
+export default function flipper(book, pages, data, options = {}) {
+  pages = pages.map((page) => typeof page === 'string' ? { image: page, map: [] } : page);
+  options = Object.assign({ scale: 0.8, spotsize: 0.08 }, options);
   const canvas = book.appendChild(document.createElement("canvas"));
   return Promise.all(loadImages(pages))
     .then(function(images) {
       const [W, H] = computeEmbedSize(images[0], options.scale);
-      const render = createRenderer(W, H, canvas);
+      const spotsize = W * options.spotsize;
+      const dataset = { selection: data, hover: {} };
+      const render = createRenderer(W, H, canvas, dataset);
       let currentPage = 0;
       let leftPage = images[currentPage-1];
       let rightPage = images[currentPage];
+      let leftMap = pages[currentPage-1];
+      let rightMap = pages[currentPage];
       let incomingLeftPage = null;
       let incomingRightPage = null;
-      render(leftPage, rightPage);
+      let incomingLeftMap = null;
+      let incomingRightMap = null;
+      render(leftPage, rightPage, leftMap, rightMap);
 
-      function dropAnimation(mouse, target, corner, leftPage, rightPage, incomingLeftPage, incomingRightPage) {
+      function dropAnimation(mouse, target, corner, leftPage, rightPage, leftMap, rightMap, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap) {
         const scaleX = linear(mouse.x, target.x);
         const scaleY = linear(mouse.y, target.y);
-        return function(a) { return render(leftPage, rightPage, corner, scaleX(a), scaleY(a), incomingLeftPage, incomingRightPage); }
+        return function(a) { return render(leftPage, rightPage, leftMap, rightMap, corner, scaleX(a), scaleY(a), incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap); }
       }
 
       function dragCorner(corner) {
         return function(event) {
           event.preventDefault();
           const mouse = render.toLocalCoordinates(event);
-          return render(images[currentPage-1], images[currentPage], corner, mouse.x, mouse.y, incomingLeftPage, incomingRightPage);
+          return render(images[currentPage-1], images[currentPage], pages[currentPage-1], pages[currentPage], corner, mouse.x, mouse.y, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap);
         };
       }
 
@@ -350,16 +399,18 @@ export default function flipper(book, pages, options = {}) {
             target = render.nearestCorner(mouse);
           }
           animating = true;
-          return animate(dropAnimation(mouse, target, corner, leftPage, rightPage, incomingLeftPage, incomingRightPage), 300)
+          return animate(dropAnimation(mouse, target, corner, leftPage, rightPage, leftMap, rightMap, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap), 300)
             .then(() => {
               animating = false;
               if (target !== corner) {
                 currentPage += 2*corner.direction;
                 leftPage = images[currentPage-1];
                 rightPage = images[currentPage];
+                leftMap = pages[currentPage-1];
+                rightMap = pages[currentPage];
                 book.dispatchEvent(new CustomEvent("mercury:pagechange", { detail: { currentPage, lastPage: !pages[currentPage+1] }}))
               }
-              return render(leftPage, rightPage);
+              return render(leftPage, rightPage, leftMap, rightMap);
             })
         };
         return listener;
@@ -368,7 +419,7 @@ export default function flipper(book, pages, options = {}) {
       function hotspot(mx, my) {
         const x = Math.abs(mx);
         const y = Math.abs(my);
-        return W-SPOTSIZE <= x && x <= W && H/2-SPOTSIZE <= y && y <= H/2;
+        return W-spotsize <= x && x <= W && H/2-spotsize <= y && y <= H/2;
       }
 
       function animateCorner(mouse) {
@@ -380,9 +431,13 @@ export default function flipper(book, pages, options = {}) {
           if (direction < 0) {
             incomingLeftPage = images[newPage];
             incomingRightPage = images[newPage-1];
+            incomingLeftMap = pages[newPage];
+            incomingRightMap = pages[newPage-1];
           } else {
             incomingLeftPage = images[newPage-1];
             incomingRightPage = images[newPage];
+            incomingLeftMap = pages[newPage-1];
+            incomingRightMap = pages[newPage];
           }
 
           const onMouseMove = dragCorner(corner);
@@ -394,11 +449,49 @@ export default function flipper(book, pages, options = {}) {
           document.addEventListener("touchend", onMouseUp, false);
           // TODO maybe: document.addEventListener("touchcancel", onMouseUp);
 
-          render(images[currentPage-1], images[currentPage], corner, mouse.x, mouse.y, incomingLeftPage, incomingRightPage);
+          render(images[currentPage-1], images[currentPage], pages[currentPage-1], pages[currentPage], corner, mouse.x, mouse.y, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap);
         }
       }
 
       book.addEventListener("mousedown", (event) => { event.preventDefault(); animateCorner(render.toLocalCoordinates(event)); });
       book.addEventListener("touchstart", (event) => { event.preventDefault(); animateCorner(render.toLocalCoordinates(event)); });
+
+      const hitTesters = {
+        circle(mouse, coords) {
+          const [x, y, r] = coords;
+          return Math.hypot(mouse.x - x, mouse.y - y) <= r;
+        },
+
+        rectangle(mouse, coords) {
+          const [x1,y1,x2,y2] = coords;
+          return x1 <= mouse.x && mouse.x <= x2 && y1 <= mouse.y && mouse.y <= y2;
+        }
+      }
+
+      book.addEventListener("mousemove", (event) => {
+        let changed = false;
+        const hitTester = (mouse) => (name, areas) => areas.forEach((area) => {
+          if (shapeSelector(hitTesters, area.shape)(mouse, area.coords)) {
+            if (!dataset.hover[name]) {
+              console.log("over", name);
+              dataset.hover[name] = true;
+              changed = true;
+            }
+          } else {
+            if (dataset.hover[name]) {
+              console.log("out", name);
+              dataset.hover[name] = false;
+              changed = true;
+            }
+          }
+        });
+
+        const mouse = render.toLocalCoordinates(event);
+        mouse.y += H/2;
+        if (pages[currentPage]) iterate(pages[currentPage].map, hitTester(mouse));
+        mouse.x += W;
+        if (pages[currentPage-1]) iterate(pages[currentPage-1].map, hitTester(mouse));
+        if (changed) render(leftPage, rightPage, leftMap, rightMap);
+      });
     });
 }

@@ -15,13 +15,20 @@
         {
           image: 'images/wired/page0.png',
           map: {
-            "page_1_0": [
-              { shape: 'rect', coords: [100, 100, 200, 200] }
-            ]
+            "page_1_0": [{ shape: 'rect', coords: [100, 100, 200, 200] }],
+            "page_1_1": [{ shape: 'circle', coords: [300, 100, 50] }]
+          }
+        }, {
+          image: 'images/wired/page1.png',
+          map: {
+            "page_2_0": [{ shape: 'circle', coords: [50, 50, 50] }]
+          }
+        }, {
+          image: 'images/wired/page2.png',
+          map: {
+            "page_3_0": [{ shape: 'rect', coords: [10, 10, 300, 300] }]
           }
         },
-        'images/wired/page1.png',
-        'images/wired/page2.png',
         'images/wired/page3.png',
         'images/wired/page4.png',
         'images/wired/page5.png',
@@ -32,7 +39,8 @@
       ];
       document.addEventListener("DOMContentLoaded", function() {
         require(["flipper"], function(flipper) {
-          flipper.default(document.querySelector('#flipbook'), pages, { scale: 0.8 });
+          const data = { page_1_0: true, page_2_0: true };
+          flipper.default(document.querySelector('#flipbook'), pages, data);
         });
       }, false);
     </script>
