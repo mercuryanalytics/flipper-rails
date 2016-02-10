@@ -4,16 +4,6 @@ const SPOTSIZE = 60;
 
 function linear(min, max) { return (x) => min + x * (max - min); }
 
-function loadImage(uri) {
-  return new Promise((resolve, reject) => {
-    var img;
-    img = document.createElement("img");
-    img.addEventListener("load", () => resolve(img), false);
-    img.addEventListener("error", () => reject(), false);
-    img.src = uri;
-  })
-}
-
 function computeEmbedSize(image, scale) {
   if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight];
 
@@ -300,12 +290,22 @@ function createRenderer(width, height, canvas) {
   return renderer;
 }
 
-function loadImages(uris) { return uris.map((uri) => loadImage(uri)); };
+function loadImage(uri) {
+  return new Promise((resolve, reject) => {
+    var img;
+    img = document.createElement("img");
+    img.addEventListener("load", () => resolve(img), false);
+    img.addEventListener("error", () => reject(uri), false);
+    img.src = uri;
+  });
+}
 
-export default function flipper(book, imageURIs, options = {}) {
+function loadImages(pages) { return pages.map((page) => loadImage(typeof page === 'string' ? page : page.image)); };
+
+export default function flipper(book, pages, options = {}) {
   options = Object.assign({ scale: 0.8 }, options);
   const canvas = book.appendChild(document.createElement("canvas"));
-  return Promise.all(loadImages(imageURIs))
+  return Promise.all(loadImages(pages))
     .then(function(images) {
       const [W, H] = computeEmbedSize(images[0], options.scale);
       const render = createRenderer(W, H, canvas);
@@ -344,7 +344,7 @@ export default function flipper(book, imageURIs, options = {}) {
           if (event.timeStamp - timeStamp < CLICK_THRESHOLD) {
             if (animating || newPage) return;
             const newPage = currentPage + 2*corner.direction;
-            if (newPage < 0 || newPage > images.length) return;
+            if (newPage < 0 || newPage > pages.length) return;
             target = render.oppositeCorner(mouse);
           } else {
             target = render.nearestCorner(mouse);
@@ -357,7 +357,7 @@ export default function flipper(book, imageURIs, options = {}) {
                 currentPage += 2*corner.direction;
                 leftPage = images[currentPage-1];
                 rightPage = images[currentPage];
-                book.dispatchEvent(new CustomEvent("mercury:pagechange", { detail: { currentPage, lastPage: !images[currentPage+1] }}))
+                book.dispatchEvent(new CustomEvent("mercury:pagechange", { detail: { currentPage, lastPage: !pages[currentPage+1] }}))
               }
               return render(leftPage, rightPage);
             })
@@ -376,7 +376,7 @@ export default function flipper(book, imageURIs, options = {}) {
           const corner = render.nearestCorner(mouse);
           const direction = corner.direction;
           const newPage = currentPage + 2*direction;
-          if (newPage < 0 || newPage > images.length) return;
+          if (newPage < 0 || newPage > pages.length) return;
           if (direction < 0) {
             incomingLeftPage = images[newPage];
             incomingRightPage = images[newPage-1];

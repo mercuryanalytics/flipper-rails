@@ -11,10 +11,28 @@
     <script>
       require.config({ baseUrl: '/app/assets/javascripts' });
 
-      var images = ['images/wired/page0.png', 'images/wired/page1.png', 'images/wired/page2.png', 'images/wired/page3.png', 'images/wired/page4.png', 'images/wired/page5.png', 'images/wired/page6.png', 'images/wired/page7.png', 'images/wired/page8.png', 'images/wired/page9.png'];
+      var pages = [
+        {
+          image: 'images/wired/page0.png',
+          map: {
+            "page_1_0": [
+              { shape: 'rect', coords: [100, 100, 200, 200] }
+            ]
+          }
+        },
+        'images/wired/page1.png',
+        'images/wired/page2.png',
+        'images/wired/page3.png',
+        'images/wired/page4.png',
+        'images/wired/page5.png',
+        'images/wired/page6.png',
+        'images/wired/page7.png',
+        'images/wired/page8.png',
+        'images/wired/page9.png'
+      ];
       document.addEventListener("DOMContentLoaded", function() {
         require(["flipper"], function(flipper) {
-          flipper.default(document.querySelector('#flipbook'), images, { scale: 0.8 });
+          flipper.default(document.querySelector('#flipbook'), pages, { scale: 0.8 });
         });
       }, false);
     </script>

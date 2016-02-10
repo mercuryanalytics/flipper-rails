@@ -65,20 +65,6 @@
     };
   }
 
-  function loadImage(uri) {
-    return new Promise(function (resolve, reject) {
-      var img;
-      img = document.createElement("img");
-      img.addEventListener("load", function () {
-        return resolve(img);
-      }, false);
-      img.addEventListener("error", function () {
-        return reject();
-      }, false);
-      img.src = uri;
-    });
-  }
-
   function computeEmbedSize(image, scale) {
     if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight];
     var availableWidth = scale * (screen.width - Math.max(window.outerWidth - window.innerWidth, 0));
@@ -545,21 +531,35 @@
     return renderer;
   }
 
-  function loadImages(uris) {
-    return uris.map(function (uri) {
-      return loadImage(uri);
+  function loadImage(uri) {
+    return new Promise(function (resolve, reject) {
+      var img;
+      img = document.createElement("img");
+      img.addEventListener("load", function () {
+        return resolve(img);
+      }, false);
+      img.addEventListener("error", function () {
+        return reject(uri);
+      }, false);
+      img.src = uri;
+    });
+  }
+
+  function loadImages(pages) {
+    return pages.map(function (page) {
+      return loadImage(typeof page === 'string' ? page : page.image);
     });
   }
 
   ;
 
-  function flipper(book, imageURIs) {
+  function flipper(book, pages) {
     var options = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
     options = Object.assign({
       scale: 0.8
     }, options);
     var canvas = book.appendChild(document.createElement("canvas"));
-    return Promise.all(loadImages(imageURIs)).then(function (images) {
+    return Promise.all(loadImages(pages)).then(function (images) {
       var _computeEmbedSize = computeEmbedSize(images[0], options.scale);
 
       var _computeEmbedSize2 = _slicedToArray(_computeEmbedSize, 2);
@@ -605,7 +605,7 @@
           if (event.timeStamp - timeStamp < CLICK_THRESHOLD) {
             if (animating || newPage) return;
             var newPage = currentPage + 2 * corner.direction;
-            if (newPage < 0 || newPage > images.length) return;
+            if (newPage < 0 || newPage > pages.length) return;
             target = render.oppositeCorner(mouse);
           } else {
             target = render.nearestCorner(mouse);
@@ -622,7 +622,7 @@
               book.dispatchEvent(new CustomEvent("mercury:pagechange", {
                 detail: {
                   currentPage: currentPage,
-                  lastPage: !images[currentPage + 1]
+                  lastPage: !pages[currentPage + 1]
                 }
               }));
             }
@@ -645,7 +645,7 @@
           var corner = render.nearestCorner(mouse);
           var direction = corner.direction;
           var newPage = currentPage + 2 * direction;
-          if (newPage < 0 || newPage > images.length) return;
+          if (newPage < 0 || newPage > pages.length) return;
 
           if (direction < 0) {
             incomingLeftPage = images[newPage];
