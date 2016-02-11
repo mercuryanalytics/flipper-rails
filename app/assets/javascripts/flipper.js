@@ -677,7 +677,9 @@
       return typeof page === 'string' ? {
         image: page,
         map: []
-      } : page;
+      } : Object.assign({
+        map: []
+      }, page);
     });
     var dataset = {
       selection: Object.assign(initialSelection(pages), data),

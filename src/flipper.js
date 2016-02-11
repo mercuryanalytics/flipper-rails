@@ -379,7 +379,7 @@ function initialSelection(pages) {
 }
 
 export default function flipper(book, pages, data, options = {}) {
-  pages = pages.map((page) => typeof page === 'string' ? { image: page, map: [] } : page);
+  pages = pages.map((page) => typeof page === 'string' ? { image: page, map: [] } : Object.assign({ map: [] }, page));
   const dataset = { selection: Object.assign(initialSelection(pages), data), hover: {} };
   let rerender = () => {};
   Object.defineProperty(book, 'selection', {
