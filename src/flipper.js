@@ -5,11 +5,28 @@ function linear(min, max) { return (x) => min + x * (max - min); }
 function iterate(o, fn) { return Object.keys(o).forEach((k) => fn(k, o[k])); }
 
 function shapeSelector(kit, shape) {
-  switch (shape) {
-    case 'circle': return kit.circle;
-    default: return kit.rectangle;
-  }
+  if (shape in kit) return kit[shape];
+  return kit.rect;
 }
+
+function pointInPolygon(x, y, coords) {
+  function crosses(x1, y1, x2, y2) {
+    if (y1 <= y && y2 > y || y1 > y && y2 <= y) {
+      const vt = (y - y1) / (y2 - y1);
+      if (x < x1 + vt*(x2 - x1)) return true;
+    }
+    return false;
+  }
+
+  let n = 0;
+  let i;
+  for (i = 2; i < coords.length; i += 2) {
+    if (crosses(coords[i - 2], coords[i - 1], coords[i], coords[i + 1])) n++;
+  }
+  if (crosses(coords[i - 2], coords[i - 1], coords[0], coords[1])) n++;
+  return n & 1 === 1;
+}
+
 
 function computeEmbedSize(image, scale) {
   if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight];
@@ -234,30 +251,42 @@ function createRenderer(width, height, canvas, dataset) {
       ctx.arc(x0 + x, y - h2, r, 0, 2*Math.PI, false);
     },
 
-    rectangle(ctx, x0, coords) {
+    rect(ctx, x0, coords) {
       const [x1,y1,x2,y2] = coords;
       ctx.rect(x0 + x1, y1 - h2, x2 - x1, y2 - y1);
+    },
+
+    poly(ctx, x0, coords) {
+      ctx.beginPath();
+      ctx.moveTo(x0 + coords[0], coords[1] - h2);
+      for (let i = 2; i < coords.length; i += 2) {
+        ctx.lineTo(x0 + coords[i], coords[i + 1] - h2);
+      }
+      ctx.closePath();
     }
   }
 
-  function renderAreas(map, ctx, x) {
-    function shapeStyle(s) {
-      if (dataset.hover[s]) return "rgba(0,255,0,0.5)";
-      if (dataset.selection[s]) return "rgba(255,0,0,0.5)";
-      return "rgba(0,0,0,0.5)";
+  function shapeStyler(s) {
+    if (dataset.hover[s]) {
+      if (dataset.selection[s]) return (ctx) => { ctx.fillStyle = "rgba(0,0,255,0.5)"; };
+      return (ctx) => { ctx.fillStyle = "rgba(0,255,0,0.5)"; };
     }
+    if (dataset.selection[s]) return (ctx) => { ctx.fillStyle = "rgba(255,0,0,0.5)"; };
+    return (ctx) => { ctx.fillStyle = "rgba(0,0,0,0.5)"; };
+  }
 
-    const renderer = (r) => (ctx, x, coords, style) => {
+  function renderAreas(map, ctx, x) {
+    const renderer = (shape) => (ctx, x, coords, setStyle) => {
       ctx.save();
-      ctx.fillStyle = style;
+      setStyle(ctx);
       ctx.beginPath();
-      r(ctx, x, coords);
+      shapeSelector(shapeRenderers, shape)(ctx, x, coords);
       ctx.closePath();
       ctx.fill();
       ctx.restore();
     };
 
-    iterate(map, (name, areas) => areas.forEach((area) => renderer(shapeSelector(shapeRenderers, area.shape))(ctx, x, area.coords, shapeStyle(name))));
+    iterate(map, (name, areas) => areas.forEach((area) => renderer(area.shape)(ctx, x, area.coords, shapeStyler(name))));
   }
 
   function renderOverleaf(ctx, corner, mouseX, mouseY, leftImage, rightImage, leftMap, rightMap) {
@@ -343,27 +372,43 @@ function loadImage(uri) {
 }
 
 function loadImages(pages) { return pages.map((page) => loadImage(page.image)); };
+function initialSelection(pages) {
+  const result = {};
+  pages.forEach((page) => iterate(page.map, (name) => { result[name] = false; }));
+  return result;
+}
 
 export default function flipper(book, pages, data, options = {}) {
   pages = pages.map((page) => typeof page === 'string' ? { image: page, map: [] } : page);
+  const dataset = { selection: Object.assign(initialSelection(pages), data), hover: {} };
+  let rerender = () => {};
+  Object.defineProperty(book, 'selection', {
+    get: () => dataset.selection,
+    set: (sel) => {
+      dataset.selection = Object.assign(initialSelection(pages), sel);
+      rerender();
+    }
+  })
+
   options = Object.assign({ scale: 0.8, spotsize: 0.08 }, options);
   const canvas = book.appendChild(document.createElement("canvas"));
   return Promise.all(loadImages(pages))
     .then(function(images) {
       const [W, H] = computeEmbedSize(images[0], options.scale);
       const spotsize = W * options.spotsize;
-      const dataset = { selection: data, hover: {} };
       const render = createRenderer(W, H, canvas, dataset);
       let currentPage = 0;
       let leftPage = images[currentPage-1];
       let rightPage = images[currentPage];
       let leftMap = pages[currentPage-1];
       let rightMap = pages[currentPage];
+      rerender = () => { render(leftPage, rightPage, leftMap, rightMap); }
+
       let incomingLeftPage = null;
       let incomingRightPage = null;
       let incomingLeftMap = null;
       let incomingRightMap = null;
-      render(leftPage, rightPage, leftMap, rightMap);
+      rerender();
 
       function dropAnimation(mouse, target, corner, leftPage, rightPage, leftMap, rightMap, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap) {
         const scaleX = linear(mouse.x, target.x);
@@ -447,7 +492,7 @@ export default function flipper(book, pages, data, options = {}) {
           const onMouseUp = dropCorner(corner, onMouseMove, mouse.timeStamp);
           document.addEventListener("mouseup", onMouseUp, false);
           document.addEventListener("touchend", onMouseUp, false);
-          // TODO maybe: document.addEventListener("touchcancel", onMouseUp);
+          // TODO: maybe: document.addEventListener("touchcancel", onMouseUp);
 
           render(images[currentPage-1], images[currentPage], pages[currentPage-1], pages[currentPage], corner, mouse.x, mouse.y, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap);
         }
@@ -462,36 +507,49 @@ export default function flipper(book, pages, data, options = {}) {
           return Math.hypot(mouse.x - x, mouse.y - y) <= r;
         },
 
-        rectangle(mouse, coords) {
+        rect(mouse, coords) {
           const [x1,y1,x2,y2] = coords;
           return x1 <= mouse.x && mouse.x <= x2 && y1 <= mouse.y && mouse.y <= y2;
+        },
+
+        poly(mouse, coords) {
+          return pointInPolygon(mouse.x, mouse.y, coords);
         }
       }
 
       book.addEventListener("mousemove", (event) => {
         let changed = false;
-        const hitTester = (mouse) => (name, areas) => areas.forEach((area) => {
-          if (shapeSelector(hitTesters, area.shape)(mouse, area.coords)) {
-            if (!dataset.hover[name]) {
-              console.log("over", name);
-              dataset.hover[name] = true;
-              changed = true;
-            }
-          } else {
-            if (dataset.hover[name]) {
-              console.log("out", name);
-              dataset.hover[name] = false;
-              changed = true;
-            }
-          }
-        });
+        const newHover = {};
+
+        const hitTester = (mouse) => (name, areas) => {
+          if (areas.some((area) => shapeSelector(hitTesters, area.shape)(mouse, area.coords))) newHover[name] = true;
+          changed |= (!!newHover[name] != !!dataset.hover[name])
+        };
 
         const mouse = render.toLocalCoordinates(event);
         mouse.y += H/2;
         if (pages[currentPage]) iterate(pages[currentPage].map, hitTester(mouse));
         mouse.x += W;
         if (pages[currentPage-1]) iterate(pages[currentPage-1].map, hitTester(mouse));
-        if (changed) render(leftPage, rightPage, leftMap, rightMap);
+
+        if (changed) {
+          dataset.hover = newHover;
+          rerender();
+        }
+      });
+
+      let timeout;
+      window.addEventListener("scroll", (event) => {
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(() => rerender(), 10);
+      })
+      book.addEventListener("click", (event) => {
+        const hits = Object.keys(dataset.hover).filter((k) => dataset.hover[k]);
+        hits.forEach((k) => { dataset.selection[k] = !dataset.selection[k]; });
+        if (hits.length > 0) {
+          book.dispatchEvent(new CustomEvent("change", { detail: { currentPage, lastPage: !pages[currentPage+1], selection: dataset.selection }}))
+          rerender();
+        }
       });
     });
 }

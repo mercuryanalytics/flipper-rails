@@ -1,6 +1,6 @@
 (function (global, factory) {
   if (typeof define === "function" && define.amd) {
-    define(['exports'], factory);
+    define(["exports"], factory);
   } else if (typeof exports !== "undefined") {
     factory(exports);
   } else {
@@ -71,13 +71,29 @@
   }
 
   function shapeSelector(kit, shape) {
-    switch (shape) {
-      case 'circle':
-        return kit.circle;
+    if (shape in kit) return kit[shape];
+    return kit.rect;
+  }
 
-      default:
-        return kit.rectangle;
+  function pointInPolygon(x, y, coords) {
+    function crosses(x1, y1, x2, y2) {
+      if (y1 <= y && y2 > y || y1 > y && y2 <= y) {
+        var vt = (y - y1) / (y2 - y1);
+        if (x < x1 + vt * (x2 - x1)) return true;
+      }
+
+      return false;
     }
+
+    var n = 0;
+    var i = undefined;
+
+    for (i = 2; i < coords.length; i += 2) {
+      if (crosses(coords[i - 2], coords[i - 1], coords[i], coords[i + 1])) n++;
+    }
+
+    if (crosses(coords[i - 2], coords[i - 1], coords[0], coords[1])) n++;
+    return n & 1 === 1;
   }
 
   function computeEmbedSize(image, scale) {
@@ -448,7 +464,7 @@
       var tx = to.x;
       var ty = to.y;
       var result = ctx.createLinearGradient(fx, fy, fx + strength * (tx - fx), fy + strength * (ty - fy));
-      result.addColorStop(0, 'rgba(0,0,0,' + mid.toFixed(4) + ')');
+      result.addColorStop(0, "rgba(0,0,0," + mid.toFixed(4) + ")");
       result.addColorStop(1, "rgba(0,0,0,0)");
       return result;
     }
@@ -462,7 +478,7 @@
         var r = _coords[2];
         ctx.arc(x0 + x, y - h2, r, 0, 2 * Math.PI, false);
       },
-      rectangle: function rectangle(ctx, x0, coords) {
+      rect: function rect(ctx, x0, coords) {
         var _coords2 = _slicedToArray(coords, 4);
 
         var x1 = _coords2[0];
@@ -470,22 +486,44 @@
         var x2 = _coords2[2];
         var y2 = _coords2[3];
         ctx.rect(x0 + x1, y1 - h2, x2 - x1, y2 - y1);
+      },
+      poly: function poly(ctx, x0, coords) {
+        ctx.beginPath();
+        ctx.moveTo(x0 + coords[0], coords[1] - h2);
+
+        for (var i = 2; i < coords.length; i += 2) {
+          ctx.lineTo(x0 + coords[i], coords[i + 1] - h2);
+        }
+
+        ctx.closePath();
       }
     };
 
-    function renderAreas(map, ctx, x) {
-      function shapeStyle(s) {
-        if (dataset.hover[s]) return "rgba(0,255,0,0.5)";
-        if (dataset.selection[s]) return "rgba(255,0,0,0.5)";
-        return "rgba(0,0,0,0.5)";
+    function shapeStyler(s) {
+      if (dataset.hover[s]) {
+        if (dataset.selection[s]) return function (ctx) {
+          ctx.fillStyle = "rgba(0,0,255,0.5)";
+        };
+        return function (ctx) {
+          ctx.fillStyle = "rgba(0,255,0,0.5)";
+        };
       }
 
-      var renderer = function renderer(r) {
-        return function (ctx, x, coords, style) {
+      if (dataset.selection[s]) return function (ctx) {
+        ctx.fillStyle = "rgba(255,0,0,0.5)";
+      };
+      return function (ctx) {
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+      };
+    }
+
+    function renderAreas(map, ctx, x) {
+      var renderer = function renderer(shape) {
+        return function (ctx, x, coords, setStyle) {
           ctx.save();
-          ctx.fillStyle = style;
+          setStyle(ctx);
           ctx.beginPath();
-          r(ctx, x, coords);
+          shapeSelector(shapeRenderers, shape)(ctx, x, coords);
           ctx.closePath();
           ctx.fill();
           ctx.restore();
@@ -494,7 +532,7 @@
 
       iterate(map, function (name, areas) {
         return areas.forEach(function (area) {
-          return renderer(shapeSelector(shapeRenderers, area.shape))(ctx, x, area.coords, shapeStyle(name));
+          return renderer(area.shape)(ctx, x, area.coords, shapeStyler(name));
         });
       });
     }
@@ -623,6 +661,16 @@
 
   ;
 
+  function initialSelection(pages) {
+    var result = {};
+    pages.forEach(function (page) {
+      return iterate(page.map, function (name) {
+        result[name] = false;
+      });
+    });
+    return result;
+  }
+
   function flipper(book, pages, data) {
     var options = arguments.length <= 3 || arguments[3] === undefined ? {} : arguments[3];
     pages = pages.map(function (page) {
@@ -630,6 +678,22 @@
         image: page,
         map: []
       } : page;
+    });
+    var dataset = {
+      selection: Object.assign(initialSelection(pages), data),
+      hover: {}
+    };
+
+    var rerender = function rerender() {};
+
+    Object.defineProperty(book, 'selection', {
+      get: function get() {
+        return dataset.selection;
+      },
+      set: function set(sel) {
+        dataset.selection = Object.assign(initialSelection(pages), sel);
+        rerender();
+      }
     });
     options = Object.assign({
       scale: 0.8,
@@ -644,21 +708,22 @@
       var W = _computeEmbedSize2[0];
       var H = _computeEmbedSize2[1];
       var spotsize = W * options.spotsize;
-      var dataset = {
-        selection: data,
-        hover: {}
-      };
       var render = createRenderer(W, H, canvas, dataset);
       var currentPage = 0;
       var leftPage = images[currentPage - 1];
       var rightPage = images[currentPage];
       var leftMap = pages[currentPage - 1];
       var rightMap = pages[currentPage];
+
+      rerender = function rerender() {
+        render(leftPage, rightPage, leftMap, rightMap);
+      };
+
       var incomingLeftPage = null;
       var incomingRightPage = null;
       var incomingLeftMap = null;
       var incomingRightMap = null;
-      render(leftPage, rightPage, leftMap, rightMap);
+      rerender();
 
       function dropAnimation(mouse, target, corner, leftPage, rightPage, leftMap, rightMap, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap) {
         var scaleX = linear(mouse.x, target.x);
@@ -774,7 +839,7 @@
           var r = _coords3[2];
           return Math.hypot(mouse.x - x, mouse.y - y) <= r;
         },
-        rectangle: function rectangle(mouse, coords) {
+        rect: function rect(mouse, coords) {
           var _coords4 = _slicedToArray(coords, 4);
 
           var x1 = _coords4[0];
@@ -782,28 +847,21 @@
           var x2 = _coords4[2];
           var y2 = _coords4[3];
           return x1 <= mouse.x && mouse.x <= x2 && y1 <= mouse.y && mouse.y <= y2;
+        },
+        poly: function poly(mouse, coords) {
+          return pointInPolygon(mouse.x, mouse.y, coords);
         }
       };
       book.addEventListener("mousemove", function (event) {
         var changed = false;
+        var newHover = {};
 
         var hitTester = function hitTester(mouse) {
           return function (name, areas) {
-            return areas.forEach(function (area) {
-              if (shapeSelector(hitTesters, area.shape)(mouse, area.coords)) {
-                if (!dataset.hover[name]) {
-                  console.log("over", name);
-                  dataset.hover[name] = true;
-                  changed = true;
-                }
-              } else {
-                if (dataset.hover[name]) {
-                  console.log("out", name);
-                  dataset.hover[name] = false;
-                  changed = true;
-                }
-              }
-            });
+            if (areas.some(function (area) {
+              return shapeSelector(hitTesters, area.shape)(mouse, area.coords);
+            })) newHover[name] = true;
+            changed |= !!newHover[name] != !!dataset.hover[name];
           };
         };
 
@@ -812,7 +870,37 @@
         if (pages[currentPage]) iterate(pages[currentPage].map, hitTester(mouse));
         mouse.x += W;
         if (pages[currentPage - 1]) iterate(pages[currentPage - 1].map, hitTester(mouse));
-        if (changed) render(leftPage, rightPage, leftMap, rightMap);
+
+        if (changed) {
+          dataset.hover = newHover;
+          rerender();
+        }
+      });
+      var timeout = undefined;
+      window.addEventListener("scroll", function (event) {
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(function () {
+          return rerender();
+        }, 10);
+      });
+      book.addEventListener("click", function (event) {
+        var hits = Object.keys(dataset.hover).filter(function (k) {
+          return dataset.hover[k];
+        });
+        hits.forEach(function (k) {
+          dataset.selection[k] = !dataset.selection[k];
+        });
+
+        if (hits.length > 0) {
+          book.dispatchEvent(new CustomEvent("change", {
+            detail: {
+              currentPage: currentPage,
+              lastPage: !pages[currentPage + 1],
+              selection: dataset.selection
+            }
+          }));
+          rerender();
+        }
       });
     });
   }
