@@ -499,21 +499,26 @@
       }
     };
 
-    function shapeStyler(s) {
+    function shapeStyler(s, style) {
+      var color = style.color;
+
       if (dataset.hover[s]) {
         if (dataset.selection[s]) return function (ctx) {
-          ctx.fillStyle = "rgba(0,0,255,0.5)";
+          ctx.fillStyle = color;
+          ctx.globalAlpha = 0.5;
         };
         return function (ctx) {
-          ctx.fillStyle = "rgba(0,255,0,0.5)";
+          ctx.fillStyle = color;
+          ctx.globalAlpha = 0.3;
         };
       }
 
       if (dataset.selection[s]) return function (ctx) {
-        ctx.fillStyle = "rgba(255,0,0,0.5)";
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.4;
       };
       return function (ctx) {
-        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.globalAlpha = 0.0;
       };
     }
 
@@ -530,9 +535,10 @@
         };
       };
 
+      var style = window.getComputedStyle(ctx.canvas);
       iterate(map, function (name, areas) {
         return areas.forEach(function (area) {
-          return renderer(area.shape)(ctx, x, area.coords, shapeStyler(name));
+          return renderer(area.shape)(ctx, x, area.coords, shapeStyler(name, style));
         });
       });
     }

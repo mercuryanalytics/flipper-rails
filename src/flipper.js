@@ -266,13 +266,14 @@ function createRenderer(width, height, canvas, dataset) {
     }
   }
 
-  function shapeStyler(s) {
+  function shapeStyler(s, style) {
+    const color = style.color;
     if (dataset.hover[s]) {
-      if (dataset.selection[s]) return (ctx) => { ctx.fillStyle = "rgba(0,0,255,0.5)"; };
-      return (ctx) => { ctx.fillStyle = "rgba(0,255,0,0.5)"; };
+      if (dataset.selection[s]) return (ctx) => { ctx.fillStyle = color; ctx.globalAlpha = 0.5; };
+      return (ctx) => { ctx.fillStyle = color; ctx.globalAlpha = 0.3; };
     }
-    if (dataset.selection[s]) return (ctx) => { ctx.fillStyle = "rgba(255,0,0,0.5)"; };
-    return (ctx) => { ctx.fillStyle = "rgba(0,0,0,0.5)"; };
+    if (dataset.selection[s]) return (ctx) => { ctx.fillStyle = color; ctx.globalAlpha = 0.4; };
+    return (ctx) => { ctx.globalAlpha = 0.0; };
   }
 
   function renderAreas(map, ctx, x) {
@@ -286,7 +287,8 @@ function createRenderer(width, height, canvas, dataset) {
       ctx.restore();
     };
 
-    iterate(map, (name, areas) => areas.forEach((area) => renderer(area.shape)(ctx, x, area.coords, shapeStyler(name))));
+    const style = window.getComputedStyle(ctx.canvas);
+    iterate(map, (name, areas) => areas.forEach((area) => renderer(area.shape)(ctx, x, area.coords, shapeStyler(name, style))));
   }
 
   function renderOverleaf(ctx, corner, mouseX, mouseY, leftImage, rightImage, leftMap, rightMap) {
