@@ -57,7 +57,6 @@
   }();
 
   var CLICK_THRESHOLD = 250;
-  var SPOTSIZE = 60;
 
   function linear(min, max) {
     return function (x) {
@@ -65,26 +64,44 @@
     };
   }
 
-  function loadImage(uri) {
-    return new Promise(function (resolve, reject) {
-      var img;
-      img = document.createElement("img");
-      img.addEventListener("load", function () {
-        return resolve(img);
-      }, false);
-      img.addEventListener("error", function () {
-        return reject();
-      }, false);
-      img.src = uri;
+  function iterate(o, fn) {
+    return Object.keys(o).forEach(function (k) {
+      return fn(k, o[k]);
     });
   }
 
+  function shapeSelector(kit, shape) {
+    if (shape in kit) return kit[shape];
+    return kit.rect;
+  }
+
+  function pointInPolygon(x, y, coords) {
+    function crosses(x1, y1, x2, y2) {
+      if (y1 <= y && y2 > y || y1 > y && y2 <= y) {
+        var vt = (y - y1) / (y2 - y1);
+        if (x < x1 + vt * (x2 - x1)) return true;
+      }
+
+      return false;
+    }
+
+    var n = 0;
+    var i = undefined;
+
+    for (i = 2; i < coords.length; i += 2) {
+      if (crosses(coords[i - 2], coords[i - 1], coords[i], coords[i + 1])) n++;
+    }
+
+    if (crosses(coords[i - 2], coords[i - 1], coords[0], coords[1])) n++;
+    return n & 1 === 1;
+  }
+
   function computeEmbedSize(image, scale) {
-    if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight];
+    if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight, 1];
     var availableWidth = scale * (screen.width - Math.max(window.outerWidth - window.innerWidth, 0));
     var availableHeight = scale * (screen.width - Math.max(window.outerHeight - window.innerHeight, 0));
 
-    if ('orientation' in window && (window.orientation / 90 & 1) == 1) {
+    if ('orientation' in window && (window.orientation / 90 & 1) === 1) {
       ;
       var _ref = [availableHeight, availableWidth];
       availableWidth = _ref[0];
@@ -100,7 +117,7 @@
       height = Math.floor(width / aspect);
     }
 
-    return [width / 2, height];
+    return [width / 2, height, height / image.naturalHeight];
   }
 
   function animate(renderFrame, duration) {
@@ -124,7 +141,10 @@
     });
   }
 
-  function createRenderer(width, height, canvas) {
+  function createRenderer(canvas, dataset, _ref2) {
+    var width = _ref2.width;
+    var height = _ref2.height;
+    var scale = _ref2.scale;
     var w = width;
     var h = height;
     var h2 = h / 2;
@@ -396,9 +416,10 @@
       var cy = corner.y;
 
       if (Math.abs(x) > w) {
-        var scale = w / Math.hypot(x, y - cy);
-        x *= scale;
-        y *= scale;
+        var _scale = w / Math.hypot(x, y - cy);
+
+        x *= _scale;
+        y *= _scale;
       }
 
       if (Math.abs(y) > h2 && y * cy > 0) {
@@ -415,9 +436,10 @@
           var b = Math.hypot(x, y + cy);
 
           if (b > outerLimit) {
-            var scale = outerLimit / b;
-            x = scale * x;
-            y = scale * (y + cy) - cy;
+            var _scale2 = outerLimit / b;
+
+            x = _scale2 * x;
+            y = _scale2 * (y + cy) - cy;
           }
         }
       } else {
@@ -425,9 +447,10 @@
         var d = Math.hypot(x, y - cy);
 
         if (d > outerLimit) {
-          var scale = outerLimit / d;
-          x = scale * x;
-          y = scale * (y - cy) + cy;
+          var _scale3 = outerLimit / d;
+
+          x = _scale3 * x;
+          y = _scale3 * (y - cy) + cy;
         }
       }
 
@@ -441,7 +464,7 @@
     }
 
     function gradient(ctx, from, to, mid, strength) {
-      if (strength == null) strength = .5;
+      if (strength === null || strength === undefined) strength = .5;
       var fx = from.x;
       var fy = from.y;
       var tx = to.x;
@@ -452,7 +475,83 @@
       return result;
     }
 
-    function renderOverleaf(ctx, corner, mouseX, mouseY, leftImage, rightImage) {
+    var shapeRenderers = {
+      circle: function circle(ctx, x0, coords) {
+        var _coords = _slicedToArray(coords, 3);
+
+        var x = _coords[0];
+        var y = _coords[1];
+        var r = _coords[2];
+        ctx.arc(x0 + x, y - h2, r, 0, 2 * Math.PI, false);
+      },
+      rect: function rect(ctx, x0, coords) {
+        var _coords2 = _slicedToArray(coords, 4);
+
+        var x1 = _coords2[0];
+        var y1 = _coords2[1];
+        var x2 = _coords2[2];
+        var y2 = _coords2[3];
+        ctx.rect(x0 + x1, y1 - h2, x2 - x1, y2 - y1);
+      },
+      poly: function poly(ctx, x0, coords) {
+        ctx.beginPath();
+        ctx.moveTo(x0 + coords[0], coords[1] - h2);
+
+        for (var i = 2; i < coords.length; i += 2) {
+          ctx.lineTo(x0 + coords[i], coords[i + 1] - h2);
+        }
+
+        ctx.closePath();
+      }
+    };
+
+    function shapeStyler(s, style) {
+      var color = style.color;
+
+      if (dataset.hover[s]) {
+        if (dataset.selection[s]) return function (ctx) {
+          ctx.fillStyle = color;
+          ctx.globalAlpha = 0.5;
+        };
+        return function (ctx) {
+          ctx.fillStyle = color;
+          ctx.globalAlpha = 0.3;
+        };
+      }
+
+      if (dataset.selection[s]) return function (ctx) {
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.4;
+      };
+      return function (ctx) {
+        ctx.globalAlpha = 0.0;
+      };
+    }
+
+    function renderAreas(map, ctx, x) {
+      var renderer = function renderer(shape) {
+        return function (ctx, x, coords, setStyle) {
+          ctx.save();
+          setStyle(ctx);
+          ctx.beginPath();
+          shapeSelector(shapeRenderers, shape)(ctx, x, coords.map(function (x) {
+            return x * scale;
+          }));
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        };
+      };
+
+      var style = window.getComputedStyle(ctx.canvas);
+      iterate(map, function (name, areas) {
+        return areas.forEach(function (area) {
+          return renderer(area.shape)(ctx, x, area.coords, shapeStyler(name, style));
+        });
+      });
+    }
+
+    function renderOverleaf(ctx, corner, mouseX, mouseY, leftImage, rightImage, leftMap, rightMap) {
       var _calculateLeafGeometr = calculateLeafGeometry(mouseX, mouseY, corner);
 
       var x = _calculateLeafGeometr.x;
@@ -484,7 +583,14 @@
       back(ctx);
       ctx.closePath();
       ctx.clip();
-      if (rightImage != null) ctx.drawImage(rightImage, corner.backX, -h2, w, h);else ctx.clearRect(corner.backX, -h2, w, h);
+
+      if (rightImage) {
+        ctx.drawImage(rightImage, corner.backX, -h2, w, h);
+        renderAreas(rightMap.map, ctx, corner.backX);
+      } else {
+        ctx.clearRect(corner.backX, -h2, w, h);
+      }
+
       ctx.fillStyle = gradient(ctx, {
         x: mx,
         y: my
@@ -498,6 +604,7 @@
       ctx.closePath();
       ctx.clip();
       ctx.drawImage(leftImage, -w, -h2, w, h);
+      renderAreas(leftMap.map, ctx, -w);
       rx(ctx);
       ctx.fillStyle = gradient(ctx, {
         x: mx,
@@ -510,7 +617,7 @@
       ctx.restore();
     }
 
-    function renderPage(ctx, image, x, dir) {
+    function renderPage(ctx, image, map, x, dir) {
       ctx.drawImage(image, x, -h2, w, h);
       ctx.beginPath();
       ctx.moveTo(0, -h2);
@@ -518,6 +625,7 @@
       ctx.lineTo(dir, h2);
       ctx.lineTo(dir, -h2);
       ctx.closePath();
+      renderAreas(map, ctx, x);
       ctx.fillStyle = gradient(ctx, {
         x: 0,
         y: 0
@@ -528,14 +636,14 @@
       ctx.fill();
     }
 
-    function renderer(left, right, corner, x, y, backLeft, backRight) {
+    function renderer(left, right, leftMap, rightMap, corner, x, y, backLeft, backRight, backLeftMap, backRightMap) {
       var ctx = canvas.getContext("2d");
       ctx.save();
       ctx.translate(w, topMargin + h2);
       ctx.clearRect(-w, -h2 - topMargin, 2 * w, h + topMargin + bottomMargin);
-      if (left) renderPage(ctx, left, -w, -w);
-      if (right) renderPage(ctx, right, 0, w);
-      if (corner) renderOverleaf(ctx, corner, x, y, backLeft, backRight);
+      if (left) renderPage(ctx, left, leftMap.map, -w, -w);
+      if (right) renderPage(ctx, right, rightMap.map, 0, w);
+      if (corner) renderOverleaf(ctx, corner, x, y, backLeft, backRight, backLeftMap, backRightMap);
       ctx.restore();
     }
 
@@ -545,40 +653,131 @@
     return renderer;
   }
 
-  function loadImages(uris) {
-    return uris.map(function (uri) {
-      return loadImage(uri);
+  function loadImage(uri) {
+    return new Promise(function (resolve, reject) {
+      var img;
+      img = document.createElement("img");
+      img.addEventListener("load", function () {
+        return resolve(img);
+      }, false);
+      img.addEventListener("error", function () {
+        return reject(uri);
+      }, false);
+      img.src = uri;
+    });
+  }
+
+  function loadImages(pages) {
+    return pages.map(function (page) {
+      return loadImage(page.image);
     });
   }
 
   ;
 
-  function flipper(book, imageURIs) {
-    var options = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
+  function initialSelection(pages) {
+    var result = {};
+    pages.forEach(function (page) {
+      return iterate(page.map, function (name) {
+        result[name] = false;
+      });
+    });
+    return result;
+  }
+
+  function flipper(book, pages, data) {
+    var options = arguments.length <= 3 || arguments[3] === undefined ? {} : arguments[3];
+    pages = pages.map(function (page) {
+      return typeof page === 'string' ? {
+        image: page,
+        map: {}
+      } : Object.assign({
+        map: {}
+      }, page);
+    });
+    var dataset = {
+      selection: Object.assign(initialSelection(pages), data),
+      hover: {}
+    };
+
+    var rerender = function rerender() {};
+
+    var fieldNames = Object.keys(dataset.selection);
+    Object.defineProperty(book, 'selection', {
+      get: function get() {
+        return dataset.selection;
+      },
+      set: function set(sel) {
+        dataset.selection = Object.assign(initialSelection(pages), sel);
+        rerender();
+      }
+    });
+    var currentPage = 0;
+    Object.defineProperty(book, 'currentPage', {
+      get: function get() {
+        return currentPage / 2;
+      }
+    });
+    Object.defineProperty(book, 'layout', {
+      get: function get() {
+        return pages;
+      }
+    });
+
+    function pageFields(page) {
+      if (page === undefined) return Object.keys(dataset.selection);
+      var result = {};
+      if (pages[page * 2 - 1]) Object.keys(pages[page * 2 - 1].map).forEach(function (k) {
+        result[k] = true;
+      });
+      if (pages[page * 2]) Object.keys(pages[page * 2].map).forEach(function (k) {
+        result[k] = true;
+      });
+      return Object.keys(result);
+    }
+
+    Object.defineProperty(pages, 'fields', {
+      value: pageFields
+    });
     options = Object.assign({
-      scale: 0.8
+      scale: 0.8,
+      spotsize: 0.08
     }, options);
     var canvas = book.appendChild(document.createElement("canvas"));
-    return Promise.all(loadImages(imageURIs)).then(function (images) {
+    return Promise.all(loadImages(pages)).then(function (images) {
       var _computeEmbedSize = computeEmbedSize(images[0], options.scale);
 
-      var _computeEmbedSize2 = _slicedToArray(_computeEmbedSize, 2);
+      var _computeEmbedSize2 = _slicedToArray(_computeEmbedSize, 3);
 
       var W = _computeEmbedSize2[0];
       var H = _computeEmbedSize2[1];
-      var render = createRenderer(W, H, canvas);
-      var currentPage = 0;
+      var scale = _computeEmbedSize2[2];
+      var spotsize = W * options.spotsize;
+      var render = createRenderer(canvas, dataset, {
+        width: W,
+        height: H,
+        scale: scale
+      });
       var leftPage = images[currentPage - 1];
       var rightPage = images[currentPage];
+      var leftMap = pages[currentPage - 1];
+      var rightMap = pages[currentPage];
+
+      rerender = function rerender() {
+        render(leftPage, rightPage, leftMap, rightMap);
+      };
+
       var incomingLeftPage = null;
       var incomingRightPage = null;
-      render(leftPage, rightPage);
+      var incomingLeftMap = null;
+      var incomingRightMap = null;
+      rerender();
 
-      function dropAnimation(mouse, target, corner, leftPage, rightPage, incomingLeftPage, incomingRightPage) {
+      function dropAnimation(mouse, target, corner, leftPage, rightPage, leftMap, rightMap, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap) {
         var scaleX = linear(mouse.x, target.x);
         var scaleY = linear(mouse.y, target.y);
         return function (a) {
-          return render(leftPage, rightPage, corner, scaleX(a), scaleY(a), incomingLeftPage, incomingRightPage);
+          return render(leftPage, rightPage, leftMap, rightMap, corner, scaleX(a), scaleY(a), incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap);
         };
       }
 
@@ -586,7 +785,7 @@
         return function (event) {
           event.preventDefault();
           var mouse = render.toLocalCoordinates(event);
-          return render(images[currentPage - 1], images[currentPage], corner, mouse.x, mouse.y, incomingLeftPage, incomingRightPage);
+          return render(images[currentPage - 1], images[currentPage], pages[currentPage - 1], pages[currentPage], corner, mouse.x, mouse.y, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap);
         };
       }
 
@@ -605,29 +804,31 @@
           if (event.timeStamp - timeStamp < CLICK_THRESHOLD) {
             if (animating || newPage) return;
             var newPage = currentPage + 2 * corner.direction;
-            if (newPage < 0 || newPage > images.length) return;
+            if (newPage < 0 || newPage > pages.length) return;
             target = render.oppositeCorner(mouse);
           } else {
             target = render.nearestCorner(mouse);
           }
 
           animating = true;
-          return animate(dropAnimation(mouse, target, corner, leftPage, rightPage, incomingLeftPage, incomingRightPage), 300).then(function () {
+          return animate(dropAnimation(mouse, target, corner, leftPage, rightPage, leftMap, rightMap, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap), 300).then(function () {
             animating = false;
 
             if (target !== corner) {
               currentPage += 2 * corner.direction;
               leftPage = images[currentPage - 1];
               rightPage = images[currentPage];
+              leftMap = pages[currentPage - 1];
+              rightMap = pages[currentPage];
               book.dispatchEvent(new CustomEvent("mercury:pagechange", {
                 detail: {
                   currentPage: currentPage,
-                  lastPage: !images[currentPage + 1]
+                  lastPage: !pages[currentPage + 1]
                 }
               }));
             }
 
-            return render(leftPage, rightPage);
+            return render(leftPage, rightPage, leftMap, rightMap);
           });
         };
 
@@ -637,7 +838,7 @@
       function hotspot(mx, my) {
         var x = Math.abs(mx);
         var y = Math.abs(my);
-        return W - SPOTSIZE <= x && x <= W && H / 2 - SPOTSIZE <= y && y <= H / 2;
+        return W - spotsize <= x && x <= W && H / 2 - spotsize <= y && y <= H / 2;
       }
 
       function animateCorner(mouse) {
@@ -645,14 +846,18 @@
           var corner = render.nearestCorner(mouse);
           var direction = corner.direction;
           var newPage = currentPage + 2 * direction;
-          if (newPage < 0 || newPage > images.length) return;
+          if (newPage < 0 || newPage > pages.length) return;
 
           if (direction < 0) {
             incomingLeftPage = images[newPage];
             incomingRightPage = images[newPage - 1];
+            incomingLeftMap = pages[newPage];
+            incomingRightMap = pages[newPage - 1];
           } else {
             incomingLeftPage = images[newPage - 1];
             incomingRightPage = images[newPage];
+            incomingLeftMap = pages[newPage - 1];
+            incomingRightMap = pages[newPage];
           }
 
           var onMouseMove = dragCorner(corner);
@@ -661,7 +866,7 @@
           var onMouseUp = dropCorner(corner, onMouseMove, mouse.timeStamp);
           document.addEventListener("mouseup", onMouseUp, false);
           document.addEventListener("touchend", onMouseUp, false);
-          render(images[currentPage - 1], images[currentPage], corner, mouse.x, mouse.y, incomingLeftPage, incomingRightPage);
+          render(images[currentPage - 1], images[currentPage], pages[currentPage - 1], pages[currentPage], corner, mouse.x, mouse.y, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap);
         }
       }
 
@@ -672,6 +877,112 @@
       book.addEventListener("touchstart", function (event) {
         event.preventDefault();
         animateCorner(render.toLocalCoordinates(event));
+      });
+      var hitTesters = {
+        circle: function circle(mouse, coords) {
+          var _coords3 = _slicedToArray(coords, 3);
+
+          var x = _coords3[0];
+          var y = _coords3[1];
+          var r = _coords3[2];
+          return Math.hypot(mouse.x - x, mouse.y - y) <= r;
+        },
+        rect: function rect(mouse, coords) {
+          var _coords4 = _slicedToArray(coords, 4);
+
+          var x1 = _coords4[0];
+          var y1 = _coords4[1];
+          var x2 = _coords4[2];
+          var y2 = _coords4[3];
+          return x1 <= mouse.x && mouse.x <= x2 && y1 <= mouse.y && mouse.y <= y2;
+        },
+        poly: function poly(mouse, coords) {
+          return pointInPolygon(mouse.x, mouse.y, coords);
+        }
+      };
+      book.addEventListener("mousemove", function (event) {
+        var changed = false;
+        var newHover = {};
+
+        var hitTester = function hitTester(mouse) {
+          return function (name, areas) {
+            if (areas.some(function (area) {
+              return shapeSelector(hitTesters, area.shape)(mouse, area.coords.map(function (x) {
+                return x * scale;
+              }));
+            })) newHover[name] = true;
+            changed |= !!newHover[name] != !!dataset.hover[name];
+          };
+        };
+
+        var mouse = render.toLocalCoordinates(event);
+        mouse.y += H / 2;
+        if (pages[currentPage]) iterate(pages[currentPage].map, hitTester(mouse));
+        mouse.x += W;
+        if (pages[currentPage - 1]) iterate(pages[currentPage - 1].map, hitTester(mouse));
+
+        if (changed) {
+          dataset.hover = newHover;
+          rerender();
+        }
+      });
+      var timeout = undefined;
+      window.addEventListener("scroll", function (event) {
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(function () {
+          return rerender();
+        }, 10);
+      });
+      book.addEventListener("click", function (event) {
+        var hits = Object.keys(dataset.hover).filter(function (k) {
+          return dataset.hover[k];
+        });
+        if (hits.length === 0) return;
+        var sel = Object.assign({}, dataset.selection);
+
+        switch (options.mode) {
+          case 'single':
+            fieldNames.forEach(function (k) {
+              return sel[k] = false;
+            });
+            break;
+
+          case 'multiple':
+            break;
+
+          default:
+            if (pages[currentPage]) Object.keys(pages[currentPage].map).forEach(function (k) {
+              return sel[k] = false;
+            });
+            if (pages[currentPage - 1]) Object.keys(pages[currentPage - 1].map).forEach(function (k) {
+              return sel[k] = false;
+            });
+            break;
+        }
+
+        hits.forEach(function (k) {
+          sel[k] = !sel[k];
+        });
+        var totalSelected = Object.keys(sel).reduce(function (sum, val) {
+          return sum + (sel[val] ? 1 : 0);
+        }, 0);
+
+        if (book.dispatchEvent(new CustomEvent("change", {
+          cancelable: true,
+          detail: {
+            currentPage: currentPage / 2,
+            lastPage: !pages[currentPage + 1],
+            selection: sel,
+            changed: hits
+          }
+        }))) {
+          dataset.selection = sel;
+          book.dispatchEvent(new CustomEvent("update", {
+            detail: sel
+          }));
+        }
+
+        rerender();
       });
     });
   }

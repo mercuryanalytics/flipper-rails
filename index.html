@@ -5,16 +5,46 @@
     <title>flipper</title>
     <style>
       body { padding-top: 1in; color: #333; background: #fbfbfb; }
+      canvas { color: black; }
     </style>
     <script src="https://cdn.polyfill.io/v2/polyfill.min.js?features=default,fetchrequestAnimationFrame,Math.hypot,Promise,CustomEvent"></script>
     <script src="node_modules/requirejs/require.js"></script>
     <script>
       require.config({ baseUrl: '/app/assets/javascripts' });
 
-      var images = ['images/wired/page0.png', 'images/wired/page1.png', 'images/wired/page2.png', 'images/wired/page3.png', 'images/wired/page4.png', 'images/wired/page5.png', 'images/wired/page6.png', 'images/wired/page7.png', 'images/wired/page8.png', 'images/wired/page9.png'];
+      var pages = [
+        {
+          image: 'images/wired/page0.png',
+          map: {
+            "page_1_0": [{ shape: 'rect', coords: [100, 100, 200, 200] }],
+            "common": [
+              { shape: 'poly', coords: [200, 300, 300, 400, 200, 500, 100, 400] },
+              { shape: 'circle', coords: [300, 100, 50] },
+            ],
+          }
+        }, {
+          image: 'images/wired/page1.png',
+          map: {
+            "common": [{ shape: 'circle', coords: [50, 150, 50] }]
+          }
+        }, {
+          image: 'images/wired/page2.png',
+          map: {
+            "common": [{ shape: 'rect', coords: [10, 10, 300, 300] }]
+          }
+        },
+        'images/wired/page3.png',
+        'images/wired/page4.png',
+        'images/wired/page5.png',
+        'images/wired/page6.png',
+        'images/wired/page7.png',
+        'images/wired/page8.png',
+        'images/wired/page9.png'
+      ];
       document.addEventListener("DOMContentLoaded", function() {
         require(["flipper"], function(flipper) {
-          flipper.default(document.querySelector('#flipbook'), images, { scale: 0.8 });
+          const data = {}; //{ page_1_0: true, page_2_0: true };
+          flipper.default(document.querySelector('#flipbook'), pages, data);
         });
       }, false);
     </script>
@@ -22,8 +52,11 @@
   <body>
     <div id='flipbook'></div>
     <script>
-      document.querySelector('#flipbook').addEventListener("flipbook:pagechange", function(event) {
+      document.querySelector("#flipbook").addEventListener("flipbook:pagechange", function(event) {
         if (event.detail.lastPage) alert("Last page");
+      }, false);
+      document.querySelector("#flipbook").addEventListener("change", function(event) {
+        console.log("change", event.detail.selection);
       }, false);
     </script>
   </body>
