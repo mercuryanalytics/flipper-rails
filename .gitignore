@@ -5,6 +5,7 @@
 /coverage/
 /doc/
 /pkg/
+/sandbox/
 /spec/reports/
 /tmp/
 /node_modules/

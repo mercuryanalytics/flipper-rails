@@ -29,11 +29,11 @@ function pointInPolygon(x, y, coords) {
 
 
 function computeEmbedSize(image, scale) {
-  if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight];
+  if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight, 1];
 
   let availableWidth = scale * (screen.width - Math.max(window.outerWidth - window.innerWidth, 0));
   let availableHeight = scale * (screen.width - Math.max(window.outerHeight - window.innerHeight, 0));
-  if ('orientation' in window && ((window.orientation / 90) & 1) == 1) [availableWidth, availableHeight] = [availableHeight, availableWidth];
+  if ('orientation' in window && ((window.orientation / 90) & 1) === 1) [availableWidth, availableHeight] = [availableHeight, availableWidth];
 
   const aspect = (2*image.naturalWidth) / image.naturalHeight;
   let height = Math.floor(availableHeight);
@@ -43,7 +43,7 @@ function computeEmbedSize(image, scale) {
     height = Math.floor(width / aspect);
   }
 
-  return [width/2, height];
+  return [width/2, height, height / image.naturalHeight];
 }
 
 function animate(renderFrame, duration) {
@@ -62,7 +62,7 @@ function animate(renderFrame, duration) {
   })
 }
 
-function createRenderer(width, height, canvas, dataset) {
+function createRenderer(canvas, dataset, { width, height, scale }) {
   const w = width;
   const h = height;
   const h2 = h/2;
@@ -234,7 +234,7 @@ function createRenderer(width, height, canvas, dataset) {
   }
 
   function gradient(ctx, from, to, mid, strength) {
-    if (strength == null) strength = .5;
+    if (strength === null || strength === undefined) strength = .5;
     const fx = from.x;
     const fy = from.y;
     const tx = to.x;
@@ -263,7 +263,7 @@ function createRenderer(width, height, canvas, dataset) {
         ctx.lineTo(x0 + coords[i], coords[i + 1] - h2);
       }
       ctx.closePath();
-    }
+    },
   }
 
   function shapeStyler(s, style) {
@@ -281,7 +281,7 @@ function createRenderer(width, height, canvas, dataset) {
       ctx.save();
       setStyle(ctx);
       ctx.beginPath();
-      shapeSelector(shapeRenderers, shape)(ctx, x, coords);
+      shapeSelector(shapeRenderers, shape)(ctx, x, coords.map((x) => x*scale));
       ctx.closePath();
       ctx.fill();
       ctx.restore();
@@ -381,25 +381,38 @@ function initialSelection(pages) {
 }
 
 export default function flipper(book, pages, data, options = {}) {
-  pages = pages.map((page) => typeof page === 'string' ? { image: page, map: [] } : Object.assign({ map: [] }, page));
+  pages = pages.map((page) => typeof page === 'string' ? { image: page, map: {} } : Object.assign({ map: {} }, page));
   const dataset = { selection: Object.assign(initialSelection(pages), data), hover: {} };
   let rerender = () => {};
+
+  const fieldNames = Object.keys(dataset.selection);
   Object.defineProperty(book, 'selection', {
     get: () => dataset.selection,
     set: (sel) => {
       dataset.selection = Object.assign(initialSelection(pages), sel);
       rerender();
     }
-  })
+  });
+
+  let currentPage = 0;
+  Object.defineProperty(book, 'currentPage', { get: () => currentPage / 2 });
+  Object.defineProperty(book, 'layout', { get: () => pages });
+  function pageFields(page) {
+    if (page === undefined) return Object.keys(dataset.selection);
+    const result = {};
+    if (pages[page*2 - 1]) Object.keys(pages[page*2 - 1].map).forEach((k) => { result[k] = true; });
+    if (pages[page*2]) Object.keys(pages[page*2].map).forEach((k) => { result[k] = true; });
+    return Object.keys(result);
+  }
+  Object.defineProperty(pages, 'fields', { value: pageFields });
 
   options = Object.assign({ scale: 0.8, spotsize: 0.08 }, options);
   const canvas = book.appendChild(document.createElement("canvas"));
   return Promise.all(loadImages(pages))
     .then(function(images) {
-      const [W, H] = computeEmbedSize(images[0], options.scale);
+      const [W, H, scale] = computeEmbedSize(images[0], options.scale);
       const spotsize = W * options.spotsize;
-      const render = createRenderer(W, H, canvas, dataset);
-      let currentPage = 0;
+      const render = createRenderer(canvas, dataset, { width: W, height: H, scale: scale });
       let leftPage = images[currentPage-1];
       let rightPage = images[currentPage];
       let leftMap = pages[currentPage-1];
@@ -516,7 +529,7 @@ export default function flipper(book, pages, data, options = {}) {
 
         poly(mouse, coords) {
           return pointInPolygon(mouse.x, mouse.y, coords);
-        }
+        },
       }
 
       book.addEventListener("mousemove", (event) => {
@@ -524,7 +537,7 @@ export default function flipper(book, pages, data, options = {}) {
         const newHover = {};
 
         const hitTester = (mouse) => (name, areas) => {
-          if (areas.some((area) => shapeSelector(hitTesters, area.shape)(mouse, area.coords))) newHover[name] = true;
+          if (areas.some((area) => shapeSelector(hitTesters, area.shape)(mouse, area.coords.map((x) => x*scale)))) newHover[name] = true;
           changed |= (!!newHover[name] != !!dataset.hover[name])
         };
 
@@ -547,11 +560,28 @@ export default function flipper(book, pages, data, options = {}) {
       })
       book.addEventListener("click", (event) => {
         const hits = Object.keys(dataset.hover).filter((k) => dataset.hover[k]);
-        hits.forEach((k) => { dataset.selection[k] = !dataset.selection[k]; });
-        if (hits.length > 0) {
-          book.dispatchEvent(new CustomEvent("change", { detail: { currentPage, lastPage: !pages[currentPage+1], selection: dataset.selection }}))
-          rerender();
+        if (hits.length === 0) return;
+        const sel = Object.assign({}, dataset.selection);
+        switch (options.mode) {
+        case 'single':
+          fieldNames.forEach((k) => sel[k] = false);
+          break;
+        case 'multiple':
+          break;
+        default: // one per page
+          if (pages[currentPage]) Object.keys(pages[currentPage].map).forEach((k) => sel[k] = false);
+          if (pages[currentPage-1]) Object.keys(pages[currentPage-1].map).forEach((k) => sel[k] = false);
+          break;
         }
+
+        hits.forEach((k) => { sel[k] = !sel[k]; });
+        const totalSelected = Object.keys(sel).reduce((sum, val) => sum + (sel[val] ? 1 : 0), 0)
+
+        if (book.dispatchEvent(new CustomEvent("change", { cancelable: true, detail: { currentPage: currentPage / 2, lastPage: !pages[currentPage+1], selection: sel, changed: hits }}))) {
+          dataset.selection = sel;
+          book.dispatchEvent(new CustomEvent("update", { detail: sel }));
+        }
+        rerender();
       });
     });
 }

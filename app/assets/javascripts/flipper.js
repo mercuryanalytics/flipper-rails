@@ -97,11 +97,11 @@
   }
 
   function computeEmbedSize(image, scale) {
-    if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight];
+    if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight, 1];
     var availableWidth = scale * (screen.width - Math.max(window.outerWidth - window.innerWidth, 0));
     var availableHeight = scale * (screen.width - Math.max(window.outerHeight - window.innerHeight, 0));
 
-    if ('orientation' in window && (window.orientation / 90 & 1) == 1) {
+    if ('orientation' in window && (window.orientation / 90 & 1) === 1) {
       ;
       var _ref = [availableHeight, availableWidth];
       availableWidth = _ref[0];
@@ -117,7 +117,7 @@
       height = Math.floor(width / aspect);
     }
 
-    return [width / 2, height];
+    return [width / 2, height, height / image.naturalHeight];
   }
 
   function animate(renderFrame, duration) {
@@ -141,7 +141,10 @@
     });
   }
 
-  function createRenderer(width, height, canvas, dataset) {
+  function createRenderer(canvas, dataset, _ref2) {
+    var width = _ref2.width;
+    var height = _ref2.height;
+    var scale = _ref2.scale;
     var w = width;
     var h = height;
     var h2 = h / 2;
@@ -413,9 +416,10 @@
       var cy = corner.y;
 
       if (Math.abs(x) > w) {
-        var scale = w / Math.hypot(x, y - cy);
-        x *= scale;
-        y *= scale;
+        var _scale = w / Math.hypot(x, y - cy);
+
+        x *= _scale;
+        y *= _scale;
       }
 
       if (Math.abs(y) > h2 && y * cy > 0) {
@@ -432,9 +436,10 @@
           var b = Math.hypot(x, y + cy);
 
           if (b > outerLimit) {
-            var scale = outerLimit / b;
-            x = scale * x;
-            y = scale * (y + cy) - cy;
+            var _scale2 = outerLimit / b;
+
+            x = _scale2 * x;
+            y = _scale2 * (y + cy) - cy;
           }
         }
       } else {
@@ -442,9 +447,10 @@
         var d = Math.hypot(x, y - cy);
 
         if (d > outerLimit) {
-          var scale = outerLimit / d;
-          x = scale * x;
-          y = scale * (y - cy) + cy;
+          var _scale3 = outerLimit / d;
+
+          x = _scale3 * x;
+          y = _scale3 * (y - cy) + cy;
         }
       }
 
@@ -458,7 +464,7 @@
     }
 
     function gradient(ctx, from, to, mid, strength) {
-      if (strength == null) strength = .5;
+      if (strength === null || strength === undefined) strength = .5;
       var fx = from.x;
       var fy = from.y;
       var tx = to.x;
@@ -528,7 +534,9 @@
           ctx.save();
           setStyle(ctx);
           ctx.beginPath();
-          shapeSelector(shapeRenderers, shape)(ctx, x, coords);
+          shapeSelector(shapeRenderers, shape)(ctx, x, coords.map(function (x) {
+            return x * scale;
+          }));
           ctx.closePath();
           ctx.fill();
           ctx.restore();
@@ -682,9 +690,9 @@
     pages = pages.map(function (page) {
       return typeof page === 'string' ? {
         image: page,
-        map: []
+        map: {}
       } : Object.assign({
-        map: []
+        map: {}
       }, page);
     });
     var dataset = {
@@ -694,6 +702,7 @@
 
     var rerender = function rerender() {};
 
+    var fieldNames = Object.keys(dataset.selection);
     Object.defineProperty(book, 'selection', {
       get: function get() {
         return dataset.selection;
@@ -703,6 +712,33 @@
         rerender();
       }
     });
+    var currentPage = 0;
+    Object.defineProperty(book, 'currentPage', {
+      get: function get() {
+        return currentPage / 2;
+      }
+    });
+    Object.defineProperty(book, 'layout', {
+      get: function get() {
+        return pages;
+      }
+    });
+
+    function pageFields(page) {
+      if (page === undefined) return Object.keys(dataset.selection);
+      var result = {};
+      if (pages[page * 2 - 1]) Object.keys(pages[page * 2 - 1].map).forEach(function (k) {
+        result[k] = true;
+      });
+      if (pages[page * 2]) Object.keys(pages[page * 2].map).forEach(function (k) {
+        result[k] = true;
+      });
+      return Object.keys(result);
+    }
+
+    Object.defineProperty(pages, 'fields', {
+      value: pageFields
+    });
     options = Object.assign({
       scale: 0.8,
       spotsize: 0.08
@@ -711,13 +747,17 @@
     return Promise.all(loadImages(pages)).then(function (images) {
       var _computeEmbedSize = computeEmbedSize(images[0], options.scale);
 
-      var _computeEmbedSize2 = _slicedToArray(_computeEmbedSize, 2);
+      var _computeEmbedSize2 = _slicedToArray(_computeEmbedSize, 3);
 
       var W = _computeEmbedSize2[0];
       var H = _computeEmbedSize2[1];
+      var scale = _computeEmbedSize2[2];
       var spotsize = W * options.spotsize;
-      var render = createRenderer(W, H, canvas, dataset);
-      var currentPage = 0;
+      var render = createRenderer(canvas, dataset, {
+        width: W,
+        height: H,
+        scale: scale
+      });
       var leftPage = images[currentPage - 1];
       var rightPage = images[currentPage];
       var leftMap = pages[currentPage - 1];
@@ -867,7 +907,9 @@
         var hitTester = function hitTester(mouse) {
           return function (name, areas) {
             if (areas.some(function (area) {
-              return shapeSelector(hitTesters, area.shape)(mouse, area.coords);
+              return shapeSelector(hitTesters, area.shape)(mouse, area.coords.map(function (x) {
+                return x * scale;
+              }));
             })) newHover[name] = true;
             changed |= !!newHover[name] != !!dataset.hover[name];
           };
@@ -895,20 +937,52 @@
         var hits = Object.keys(dataset.hover).filter(function (k) {
           return dataset.hover[k];
         });
-        hits.forEach(function (k) {
-          dataset.selection[k] = !dataset.selection[k];
-        });
+        if (hits.length === 0) return;
+        var sel = Object.assign({}, dataset.selection);
 
-        if (hits.length > 0) {
-          book.dispatchEvent(new CustomEvent("change", {
-            detail: {
-              currentPage: currentPage,
-              lastPage: !pages[currentPage + 1],
-              selection: dataset.selection
-            }
-          }));
-          rerender();
+        switch (options.mode) {
+          case 'single':
+            fieldNames.forEach(function (k) {
+              return sel[k] = false;
+            });
+            break;
+
+          case 'multiple':
+            break;
+
+          default:
+            if (pages[currentPage]) Object.keys(pages[currentPage].map).forEach(function (k) {
+              return sel[k] = false;
+            });
+            if (pages[currentPage - 1]) Object.keys(pages[currentPage - 1].map).forEach(function (k) {
+              return sel[k] = false;
+            });
+            break;
         }
+
+        hits.forEach(function (k) {
+          sel[k] = !sel[k];
+        });
+        var totalSelected = Object.keys(sel).reduce(function (sum, val) {
+          return sum + (sel[val] ? 1 : 0);
+        }, 0);
+
+        if (book.dispatchEvent(new CustomEvent("change", {
+          cancelable: true,
+          detail: {
+            currentPage: currentPage / 2,
+            lastPage: !pages[currentPage + 1],
+            selection: sel,
+            changed: hits
+          }
+        }))) {
+          dataset.selection = sel;
+          book.dispatchEvent(new CustomEvent("update", {
+            detail: sel
+          }));
+        }
+
+        rerender();
       });
     });
   }
