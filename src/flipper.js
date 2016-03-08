@@ -559,18 +559,21 @@ export default function flipper(book, pages, data, options = {}) {
         timeout = setTimeout(() => rerender(), 10);
       })
       book.addEventListener("click", (event) => {
-        const hits = Object.keys(dataset.hover).filter((k) => dataset.hover[k]);
+        let hits = Object.keys(dataset.hover).filter((k) => dataset.hover[k]);
         if (hits.length === 0) return;
         const sel = Object.assign({}, dataset.selection);
+        const clearMisses = (k) => { if (hits.indexOf(k) < 0) sel[k] = false; }
         switch (options.mode) {
         case 'single':
-          fieldNames.forEach((k) => sel[k] = false);
+          hits = hits.slice(0, 1);
+          fieldNames.forEach(clearMisses);
           break;
         case 'multiple':
           break;
         default: // one per page
-          if (pages[currentPage]) Object.keys(pages[currentPage].map).forEach((k) => sel[k] = false);
-          if (pages[currentPage-1]) Object.keys(pages[currentPage-1].map).forEach((k) => sel[k] = false);
+          hits = hits.slice(0, 1);
+          if (pages[currentPage]) Object.keys(pages[currentPage].map).forEach(clearMisses);
+          if (pages[currentPage-1]) Object.keys(pages[currentPage-1].map).forEach(clearMisses);
           break;
         }
 

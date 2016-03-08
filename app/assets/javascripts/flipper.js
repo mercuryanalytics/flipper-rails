@@ -940,23 +940,23 @@
         if (hits.length === 0) return;
         var sel = Object.assign({}, dataset.selection);
 
+        var clearMisses = function clearMisses(k) {
+          if (hits.indexOf(k) < 0) sel[k] = false;
+        };
+
         switch (options.mode) {
           case 'single':
-            fieldNames.forEach(function (k) {
-              return sel[k] = false;
-            });
+            hits = hits.slice(0, 1);
+            fieldNames.forEach(clearMisses);
             break;
 
           case 'multiple':
             break;
 
           default:
-            if (pages[currentPage]) Object.keys(pages[currentPage].map).forEach(function (k) {
-              return sel[k] = false;
-            });
-            if (pages[currentPage - 1]) Object.keys(pages[currentPage - 1].map).forEach(function (k) {
-              return sel[k] = false;
-            });
+            hits = hits.slice(0, 1);
+            if (pages[currentPage]) Object.keys(pages[currentPage].map).forEach(clearMisses);
+            if (pages[currentPage - 1]) Object.keys(pages[currentPage - 1].map).forEach(clearMisses);
             break;
         }
 
