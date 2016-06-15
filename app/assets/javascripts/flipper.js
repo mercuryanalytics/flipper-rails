@@ -98,22 +98,16 @@
 
   function computeEmbedSize(image, scale) {
     if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight, 1];
-    var availableWidth = scale * (screen.width - Math.max(window.outerWidth - window.innerWidth, 0));
-    var availableHeight = scale * (screen.width - Math.max(window.outerHeight - window.innerHeight, 0));
-
-    if ('orientation' in window && (window.orientation / 90 & 1) === 1) {
-      ;
-      var _ref = [availableHeight, availableWidth];
-      availableWidth = _ref[0];
-      availableHeight = _ref[1];
-    }
-
+    var W = window.innerWidth;
+    var H = window.innerHeight;
+    var availableWidth = scale * (W - Math.max(window.outerWidth - window.innerWidth, 0));
+    var availableHeight = scale * (H - Math.max(window.outerHeight - window.innerHeight, 0));
     var aspect = 2 * image.naturalWidth / image.naturalHeight;
     var height = Math.floor(availableHeight);
     var width = Math.floor(height * aspect);
 
     if (width > availableWidth) {
-      width = availableWidth;
+      width = Math.floor(availableWidth);
       height = Math.floor(width / aspect);
     }
 
@@ -141,10 +135,10 @@
     });
   }
 
-  function createRenderer(canvas, dataset, _ref2) {
-    var width = _ref2.width;
-    var height = _ref2.height;
-    var scale = _ref2.scale;
+  function createRenderer(canvas, dataset, _ref) {
+    var width = _ref.width;
+    var height = _ref.height;
+    var scale = _ref.scale;
     var w = width;
     var h = height;
     var h2 = h / 2;

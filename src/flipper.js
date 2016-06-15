@@ -31,15 +31,17 @@ function pointInPolygon(x, y, coords) {
 function computeEmbedSize(image, scale) {
   if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight, 1];
 
-  let availableWidth = scale * (screen.width - Math.max(window.outerWidth - window.innerWidth, 0));
-  let availableHeight = scale * (screen.width - Math.max(window.outerHeight - window.innerHeight, 0));
-  if ('orientation' in window && ((window.orientation / 90) & 1) === 1) [availableWidth, availableHeight] = [availableHeight, availableWidth];
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+
+  const availableWidth = scale * (W - Math.max(window.outerWidth - window.innerWidth, 0));
+  const availableHeight = scale * (H - Math.max(window.outerHeight - window.innerHeight, 0));
 
   const aspect = (2*image.naturalWidth) / image.naturalHeight;
   let height = Math.floor(availableHeight);
   let width = Math.floor(height * aspect);
   if (width > availableWidth) {
-    width = availableWidth;
+    width = Math.floor(availableWidth);
     height = Math.floor(width / aspect);
   }
 
