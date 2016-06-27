@@ -9,6 +9,23 @@ function shapeSelector(kit, shape) {
   return kit.rect;
 }
 
+function once(callback) {
+  const handler = (event) => {
+    event.target.removeEventListener(event.type, handler);
+    callback(event);
+  };
+  return handler;
+}
+
+const RGBA = /^\s*rgba\s*\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*(\d+)\s*\)\s*$/;
+function inferBackgroundColor(node) {
+  const color = window.getComputedStyle(node).backgroundColor;
+  const match = RGBA.exec(color);
+  if (match && Number(match[1]) === 0 && node.parentNode) return inferBackgroundColor(node.parentNode);
+  return color;
+}
+window.inferBackgroundColor = inferBackgroundColor;
+
 function pointInPolygon(x, y, coords) {
   function crosses(x1, y1, x2, y2) {
     if (y1 <= y && y2 > y || y1 > y && y2 <= y) {
@@ -34,8 +51,8 @@ function computeEmbedSize(image, scale) {
   const W = window.innerWidth;
   const H = window.innerHeight;
 
-  const availableWidth = scale * (W - Math.max(window.outerWidth - window.innerWidth, 0));
-  const availableHeight = scale * (H - Math.max(window.outerHeight - window.innerHeight, 0));
+  const availableWidth = scale * W;
+  const availableHeight = scale * H;
 
   const aspect = (2*image.naturalWidth) / image.naturalHeight;
   let height = Math.floor(availableHeight);
@@ -368,7 +385,8 @@ function createRenderer(canvas, dataset, { width, height, scale }) {
 function loadImage(uri) {
   return new Promise((resolve, reject) => {
     var img;
-    img = document.createElement("img");
+    img = new Image();
+    img.crossOrigin = "anonymous";
     img.addEventListener("load", () => resolve(img), false);
     img.addEventListener("error", () => reject(uri), false);
     img.src = uri;
@@ -382,11 +400,77 @@ function initialSelection(pages) {
   return result;
 }
 
+function installMagnifier(book, canvas, render, images, W, H, mScale, mRadius) {
+  const magnifier = book.appendChild(document.createElement("div"));
+
+  magnifier.style.display = "none";
+  magnifier.style.position = "absolute";
+  magnifier.style.width = `${mRadius*2}px`;
+  magnifier.style.height = `${mRadius*2}px`;
+  magnifier.style.border = "solid black 1px";
+  magnifier.style.borderRadius = `${mRadius}px`;
+  magnifier.style.pointerEvents = 'none';
+  magnifier.style.top = '0px';
+  magnifier.style.left = `${W}px`;
+  magnifier.style.backgroundSize = `auto ${mScale * H}px`;
+  magnifier.style.backgroundColor = inferBackgroundColor(canvas);
+  magnifier.style.backgroundRepeat = "no-repeat";
+
+  const magCanvas = document.createElement("canvas");
+  magCanvas.width = 2*W;
+  magCanvas.height = H;
+
+  const renderMagnifier = (page) => {
+    const ctx = magCanvas.getContext("2d");
+    ctx.save();
+    ctx.clearRect(0, 0, mScale*2*W, mScale*H);
+    if (page > 0) ctx.drawImage(images[page - 1], 0, 0, W, H);
+    if (page < images.length) ctx.drawImage(images[page], W, 0, W, H);
+    ctx.restore();
+    magnifier.style.backgroundImage = `url(${magCanvas.toDataURL()})`;
+  };
+
+  renderMagnifier(0);
+  book.addEventListener("mercury:pagechange", (event) => { renderMagnifier(event.detail.currentPage); });
+
+  const hideMagnifier = (event) => { magnifier.style.display = "none"; }
+  const showMagnifier = (event) => { magnifier.style.display = "block"; }
+  canvas.addEventListener("mousedown", hideMagnifier);
+  canvas.addEventListener("mouseout", hideMagnifier);
+  canvas.addEventListener("mouseup", showMagnifier);
+  canvas.addEventListener("mouseover", showMagnifier);
+  const moveMagnifier = (event) => {
+    const mouse = render.toLocalCoordinates(event);
+    const x = W;
+    const y = H/2;
+    magnifier.style.left = `${x + mouse.x - mRadius}px`;
+    magnifier.style.top = `${y + mouse.y - mRadius}px`;
+
+    const mx = mRadius - mScale * (mouse.x + W);
+    const my = mRadius - mScale * (mouse.y + H/2);
+
+    magnifier.style.backgroundPosition = `${mx}px ${my}px`;
+  };
+
+  canvas.addEventListener("mousemove", moveMagnifier);
+  canvas.addEventListener("touchmove", moveMagnifier);
+  canvas.addEventListener("touchstart", (event) => {
+    event.preventDefault();
+    moveMagnifier(event);
+    showMagnifier();
+    canvas.addEventListener("touchend", once((event) => {
+      event.preventDefault();
+      hideMagnifier();
+    }));
+  });
+}
+
 export default function flipper(book, pages, data, options = {}) {
   pages = pages.map((page) => typeof page === 'string' ? { image: page, map: {} } : Object.assign({ map: {} }, page));
   const dataset = { selection: Object.assign(initialSelection(pages), data), hover: {} };
   let rerender = () => {};
 
+  book.style.position = "relative";
   const fieldNames = Object.keys(dataset.selection);
   Object.defineProperty(book, 'selection', {
     get: () => dataset.selection,
@@ -408,13 +492,21 @@ export default function flipper(book, pages, data, options = {}) {
   }
   Object.defineProperty(pages, 'fields', { value: pageFields });
 
-  options = Object.assign({ scale: 0.8, spotsize: 0.08 }, options);
+  options = Object.assign({ scale: 0.8, spotsize: 0.08, magnifierRadius: 100 }, options);
   const canvas = book.appendChild(document.createElement("canvas"));
   return Promise.all(loadImages(pages))
     .then(function(images) {
       const [W, H, scale] = computeEmbedSize(images[0], options.scale);
       const spotsize = W * options.spotsize;
+
       const render = createRenderer(canvas, dataset, { width: W, height: H, scale: scale });
+      if (!isNaN(options.magnifierScale)) {
+        for (let page of pages) page.map = {};
+        const mScale = options.magnifierScale;
+        const mRadius = options.magnifierRadius;
+        installMagnifier(book, canvas, render, images, W, H, options.magnifierScale, options.magnifierRadius);
+      }
+
       let leftPage = images[currentPage-1];
       let rightPage = images[currentPage];
       let leftMap = pages[currentPage-1];
