@@ -400,7 +400,9 @@ function initialSelection(pages) {
   return result;
 }
 
-function installMagnifier(book, canvas, render, images, W, H, mScale, mRadius) {
+function installMagnifier(book, canvas, render, images, W, H, mScale, mRadius, mCornerRadius) {
+  if (isNaN(mCornerRadius)) mCornerRadius = mRadius;
+
   const magnifier = book.appendChild(document.createElement("div"));
 
   magnifier.style.display = "none";
@@ -408,7 +410,7 @@ function installMagnifier(book, canvas, render, images, W, H, mScale, mRadius) {
   magnifier.style.width = `${mRadius*2}px`;
   magnifier.style.height = `${mRadius*2}px`;
   magnifier.style.border = "solid black 1px";
-  magnifier.style.borderRadius = `${mRadius}px`;
+  magnifier.style.borderRadius = `${mCornerRadius}px`;
   magnifier.style.pointerEvents = 'none';
   magnifier.style.top = '0px';
   magnifier.style.left = `${W}px`;
@@ -502,9 +504,7 @@ export default function flipper(book, pages, data, options = {}) {
       const render = createRenderer(canvas, dataset, { width: W, height: H, scale: scale });
       if (!isNaN(options.magnifierScale)) {
         for (let page of pages) page.map = {};
-        const mScale = options.magnifierScale;
-        const mRadius = options.magnifierRadius;
-        installMagnifier(book, canvas, render, images, W, H, options.magnifierScale, options.magnifierRadius);
+        installMagnifier(book, canvas, render, images, W, H, options.magnifierScale, options.magnifierRadius, options.magnifierCornerRadius);
       }
 
       let leftPage = images[currentPage-1];

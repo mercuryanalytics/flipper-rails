@@ -700,14 +700,15 @@
     return result;
   }
 
-  function installMagnifier(book, canvas, render, images, W, H, mScale, mRadius) {
+  function installMagnifier(book, canvas, render, images, W, H, mScale, mRadius, mCornerRadius) {
+    if (isNaN(mCornerRadius)) mCornerRadius = mRadius;
     var magnifier = book.appendChild(document.createElement("div"));
     magnifier.style.display = "none";
     magnifier.style.position = "absolute";
     magnifier.style.width = mRadius * 2 + "px";
     magnifier.style.height = mRadius * 2 + "px";
     magnifier.style.border = "solid black 1px";
-    magnifier.style.borderRadius = mRadius + "px";
+    magnifier.style.borderRadius = mCornerRadius + "px";
     magnifier.style.pointerEvents = 'none';
     magnifier.style.top = '0px';
     magnifier.style.left = W + "px";
@@ -871,9 +872,7 @@
           }
         }
 
-        var mScale = options.magnifierScale;
-        var mRadius = options.magnifierRadius;
-        installMagnifier(book, canvas, render, images, W, H, options.magnifierScale, options.magnifierRadius);
+        installMagnifier(book, canvas, render, images, W, H, options.magnifierScale, options.magnifierRadius, options.magnifierCornerRadius);
       }
 
       var leftPage = images[currentPage - 1];
