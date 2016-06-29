@@ -401,7 +401,7 @@ function initialSelection(pages) {
 }
 
 function installMagnifier(book, canvas, render, images, W, H, mScale, mRadius, mCornerRadius) {
-  if (isNaN(mCornerRadius)) mCornerRadius = mRadius;
+  if (isNaN(mCornerRadius)) mCornerRadius = mRadius / 2;
 
   const magnifier = book.appendChild(document.createElement("div"));
 
