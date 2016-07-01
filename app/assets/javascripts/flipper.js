@@ -700,19 +700,23 @@
     return result;
   }
 
-  function installMagnifier(book, canvas, render, images, W, H, mScale, mRadius, mCornerRadius) {
-    if (isNaN(mCornerRadius)) mCornerRadius = mRadius / 2;
+  function installMagnifier(book, canvas, render, images, W, H, options) {
+    var scale = options.scale;
+    var width = options.width;
+    var height = options.height;
+    var borderRadius = options.borderRadius;
+    if (isNaN(borderRadius)) borderRadius = Math.min(width, height) / 4;
     var magnifier = book.appendChild(document.createElement("div"));
     magnifier.style.display = "none";
     magnifier.style.position = "absolute";
-    magnifier.style.width = mRadius * 2 + "px";
-    magnifier.style.height = mRadius * 2 + "px";
+    magnifier.style.width = width + "px";
+    magnifier.style.height = height + "px";
     magnifier.style.border = "solid black 1px";
-    magnifier.style.borderRadius = mCornerRadius + "px";
+    magnifier.style.borderRadius = borderRadius + "px";
     magnifier.style.pointerEvents = 'none';
     magnifier.style.top = '0px';
     magnifier.style.left = W + "px";
-    magnifier.style.backgroundSize = "auto " + mScale * H + "px";
+    magnifier.style.backgroundSize = "auto " + scale * H + "px";
     magnifier.style.backgroundColor = inferBackgroundColor(canvas);
     magnifier.style.backgroundRepeat = "no-repeat";
     var magCanvas = document.createElement("canvas");
@@ -753,10 +757,10 @@
       var mouse = render.toLocalCoordinates(event);
       var x = W;
       var y = H / 2;
-      magnifier.style.left = x + mouse.x - mRadius + "px";
-      magnifier.style.top = y + mouse.y - mRadius + "px";
-      var mx = mRadius - mScale * (mouse.x + W);
-      var my = mRadius - mScale * (mouse.y + H / 2);
+      magnifier.style.left = x + mouse.x - width / 2 + "px";
+      magnifier.style.top = y + mouse.y - height / 2 + "px";
+      var mx = width / 2 - scale * (mouse.x + W);
+      var my = height / 2 - scale * (mouse.y + H / 2);
       magnifier.style.backgroundPosition = mx + "px " + my + "px";
     };
 
@@ -874,7 +878,12 @@
           }
         }
 
-        installMagnifier(book, canvas, render, images, W, H, options.magnifierScale, options.magnifierRadius, options.magnifierCornerRadius);
+        installMagnifier(book, canvas, render, images, W, H, {
+          scale: options.magnifierScale,
+          width: options.magnifierWidth || options.magnifierHeight || options.magnifierRadius * 2,
+          height: options.magnifierHeight || options.magnifierWidth || options.magnifierRadius * 2,
+          borderRadius: options.magnifierCornerRadius
+        });
       }
 
       var leftPage = images[currentPage - 1];

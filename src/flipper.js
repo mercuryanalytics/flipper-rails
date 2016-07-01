@@ -400,21 +400,23 @@ function initialSelection(pages) {
   return result;
 }
 
-function installMagnifier(book, canvas, render, images, W, H, mScale, mRadius, mCornerRadius) {
-  if (isNaN(mCornerRadius)) mCornerRadius = mRadius / 2;
+function installMagnifier(book, canvas, render, images, W, H, options) {
+  const { scale, width, height } = options;
+  let borderRadius = options.borderRadius;
+  if (isNaN(borderRadius)) borderRadius = Math.min(width, height) / 4;
 
   const magnifier = book.appendChild(document.createElement("div"));
 
   magnifier.style.display = "none";
   magnifier.style.position = "absolute";
-  magnifier.style.width = `${mRadius*2}px`;
-  magnifier.style.height = `${mRadius*2}px`;
+  magnifier.style.width = `${width}px`;
+  magnifier.style.height = `${height}px`;
   magnifier.style.border = "solid black 1px";
-  magnifier.style.borderRadius = `${mCornerRadius}px`;
+  magnifier.style.borderRadius = `${borderRadius}px`;
   magnifier.style.pointerEvents = 'none';
   magnifier.style.top = '0px';
   magnifier.style.left = `${W}px`;
-  magnifier.style.backgroundSize = `auto ${mScale * H}px`;
+  magnifier.style.backgroundSize = `auto ${scale * H}px`;
   magnifier.style.backgroundColor = inferBackgroundColor(canvas);
   magnifier.style.backgroundRepeat = "no-repeat";
 
@@ -447,11 +449,11 @@ function installMagnifier(book, canvas, render, images, W, H, mScale, mRadius, m
     const mouse = render.toLocalCoordinates(event);
     const x = W;
     const y = H/2;
-    magnifier.style.left = `${x + mouse.x - mRadius}px`;
-    magnifier.style.top = `${y + mouse.y - mRadius}px`;
+    magnifier.style.left = `${x + mouse.x - width/2}px`;
+    magnifier.style.top = `${y + mouse.y - height/2}px`;
 
-    const mx = mRadius - mScale * (mouse.x + W);
-    const my = mRadius - mScale * (mouse.y + H/2);
+    const mx = width/2 - scale * (mouse.x + W);
+    const my = height/2 - scale * (mouse.y + H/2);
 
     magnifier.style.backgroundPosition = `${mx}px ${my}px`;
   };
@@ -506,7 +508,12 @@ export default function flipper(book, pages, data, options = {}) {
       const render = createRenderer(canvas, dataset, { width: W, height: H, scale: scale });
       if (!isNaN(options.magnifierScale)) {
         for (let page of pages) page.map = {};
-        installMagnifier(book, canvas, render, images, W, H, options.magnifierScale, options.magnifierRadius, options.magnifierCornerRadius);
+        installMagnifier(book, canvas, render, images, W, H, {
+          scale: options.magnifierScale,
+          width: options.magnifierWidth || options.magnifierHeight || options.magnifierRadius*2,
+          height: options.magnifierHeight || options.magnifierWidth || options.magnifierRadius*2,
+          borderRadius: options.magnifierCornerRadius,
+        });
       }
 
       let leftPage = images[currentPage-1];
