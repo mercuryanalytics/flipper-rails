@@ -41,10 +41,22 @@
         'images/wired/page8.png',
         'images/wired/page9.png'
       ];
+
+      pages = [
+        { image: 'hires/images/980_1_COVER-1.png' },
+        { image: 'hires/images/980_2_VO_041_20160501-1.png' },
+        { image: 'hires/images/980_3_VO_042_20160501-1.png' },
+        { image: 'hires/images/980_4_Chevy_Vogue_May2016.JPG' },
+        { image: 'hires/images/980_5_VO_108_VOFRNT1703320-1.png' },
+        { image: 'hires/images/980_6_VO_175_20160501-1.png' },
+        { image: 'hires/images/980_7_VO_176_20160501-1.png' },
+        { image: 'hires/images/980_8_CHEVY_CONTENT_1-1.png' },
+      ];
+
       document.addEventListener("DOMContentLoaded", function() {
         require(["flipper"], function(flipper) {
           const data = {}; //{ page_1_0: true, page_2_0: true };
-          flipper.default(document.querySelector('#flipbook'), pages, data);
+          flipper.default(document.querySelector('#flipbook'), pages, data, { magnifierScale: 2 });
         });
       }, false);
     </script>

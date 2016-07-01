@@ -716,15 +716,17 @@
     magnifier.style.backgroundColor = inferBackgroundColor(canvas);
     magnifier.style.backgroundRepeat = "no-repeat";
     var magCanvas = document.createElement("canvas");
-    magCanvas.width = 2 * W;
-    magCanvas.height = H;
+    var w = images[0].naturalWidth;
+    var h = images[0].naturalHeight;
+    magCanvas.width = 2 * w;
+    magCanvas.height = h;
 
     var renderMagnifier = function renderMagnifier(page) {
       var ctx = magCanvas.getContext("2d");
       ctx.save();
-      ctx.clearRect(0, 0, mScale * 2 * W, mScale * H);
-      if (page > 0) ctx.drawImage(images[page - 1], 0, 0, W, H);
-      if (page < images.length) ctx.drawImage(images[page], W, 0, W, H);
+      ctx.clearRect(0, 0, w, h);
+      if (page > 0) ctx.drawImage(images[page - 1], 0, 0, w, h);
+      if (page < images.length) ctx.drawImage(images[page], w, 0, w, h);
       ctx.restore();
       magnifier.style.backgroundImage = "url(" + magCanvas.toDataURL() + ")";
     };
