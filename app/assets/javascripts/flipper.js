@@ -777,6 +777,25 @@
     });
   }
 
+  var DEFAULT_OPTIONS = {
+    scale: 0.8,
+    spotsize: 0.08,
+    magnifierRadius: 100,
+    start: 0,
+    minPage: 0,
+    maxPage: -1
+  };
+
+  function normalizeIndex(index, modulus) {
+    index %= modulus;
+    if (index < 0) index += modulus;
+    return index;
+  }
+
+  function even(x) {
+    return (x & 1) === 0;
+  }
+
   function flipper(book, pages, data) {
     var options = arguments.length <= 3 || arguments[3] === undefined ? {} : arguments[3];
     pages = pages.map(function (page) {
@@ -787,6 +806,10 @@
         map: {}
       }, page);
     });
+    options = Object.assign(DEFAULT_OPTIONS, options);
+    options.minPage = normalizeIndex(options.minPage, pages.length);
+    options.maxPage = normalizeIndex(options.maxPage, pages.length);
+    if (even(pages.length) || options.start !== pages.length) options.start = Math.min(Math.max(options.start, options.minPage), options.maxPage);
     var dataset = {
       selection: Object.assign(initialSelection(pages), data),
       hover: {}
@@ -805,7 +828,7 @@
         rerender();
       }
     });
-    var currentPage = 0;
+    var currentPage = options.start;
     Object.defineProperty(book, 'currentPage', {
       get: function get() {
         return currentPage / 2;
@@ -832,11 +855,6 @@
     Object.defineProperty(pages, 'fields', {
       value: pageFields
     });
-    options = Object.assign({
-      scale: 0.8,
-      spotsize: 0.08,
-      magnifierRadius: 100
-    }, options);
     var canvas = book.appendChild(document.createElement("canvas"));
     return Promise.all(loadImages(pages)).then(function (images) {
       var _computeEmbedSize = computeEmbedSize(images[0], options.scale);
@@ -932,7 +950,7 @@
           if (event.timeStamp - timeStamp < CLICK_THRESHOLD) {
             if (animating || newPage) return;
             var newPage = currentPage + 2 * corner.direction;
-            if (newPage < 0 || newPage > pages.length) return;
+            if (newPage < options.minPage || newPage > options.maxPage + 1) return;
             target = render.oppositeCorner(mouse);
           } else {
             target = render.nearestCorner(mouse);
@@ -974,7 +992,7 @@
           var corner = render.nearestCorner(mouse);
           var direction = corner.direction;
           var newPage = currentPage + 2 * direction;
-          if (newPage < 0 || newPage > pages.length) return;
+          if (newPage < options.minPage || newPage > options.maxPage + 1) return;
 
           if (direction < 0) {
             incomingLeftPage = images[newPage];
