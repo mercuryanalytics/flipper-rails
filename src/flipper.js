@@ -494,7 +494,7 @@ export default function flipper(book, pages, data, options = {}) {
 
   options.minPage = normalizeIndex(options.minPage, pages.length);
   options.maxPage = normalizeIndex(options.maxPage, pages.length);
-  if (even(pages.length) || options.start !== pages.length) options.start = Math.min(Math.max(options.start, options.minPage), options.maxPage);
+  if (options.start !== pages.length) options.start = Math.min(Math.max(options.start, options.minPage), options.maxPage);
 
   const dataset = { selection: Object.assign(initialSelection(pages), data), hover: {} };
   let rerender = () => {};

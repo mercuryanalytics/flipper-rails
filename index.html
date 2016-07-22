@@ -45,7 +45,7 @@
       document.addEventListener("DOMContentLoaded", function() {
         require(["flipper"], function(flipper) {
           const data = {}; //{ page_1_0: true, page_2_0: true };
-          flipper.default(document.querySelector('#flipbook'), pages, data, { minPage: 2, start: 10 });
+          flipper.default(document.querySelector('#flipbook'), pages, data);
         });
       }, false);
     </script>

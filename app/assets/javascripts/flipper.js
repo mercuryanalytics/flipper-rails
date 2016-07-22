@@ -792,10 +792,6 @@
     return index;
   }
 
-  function even(x) {
-    return (x & 1) === 0;
-  }
-
   function flipper(book, pages, data) {
     var options = arguments.length <= 3 || arguments[3] === undefined ? {} : arguments[3];
     pages = pages.map(function (page) {
@@ -809,7 +805,7 @@
     options = Object.assign(DEFAULT_OPTIONS, options);
     options.minPage = normalizeIndex(options.minPage, pages.length);
     options.maxPage = normalizeIndex(options.maxPage, pages.length);
-    if (even(pages.length) || options.start !== pages.length) options.start = Math.min(Math.max(options.start, options.minPage), options.maxPage);
+    if (options.start !== pages.length) options.start = Math.min(Math.max(options.start, options.minPage), options.maxPage);
     var dataset = {
       selection: Object.assign(initialSelection(pages), data),
       hover: {}
