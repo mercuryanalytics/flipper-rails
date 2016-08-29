@@ -792,6 +792,10 @@
     return index;
   }
 
+  function even(x) {
+    return (x & 1) === 0;
+  }
+
   function flipper(book, pages, data) {
     var options = arguments.length <= 3 || arguments[3] === undefined ? {} : arguments[3];
     pages = pages.map(function (page) {
@@ -853,6 +857,8 @@
     });
     var canvas = book.appendChild(document.createElement("canvas"));
     return Promise.all(loadImages(pages)).then(function (images) {
+      console.log("Pages", pages);
+
       var _computeEmbedSize = computeEmbedSize(images[0], options.scale);
 
       var _computeEmbedSize2 = _slicedToArray(_computeEmbedSize, 3);
@@ -868,28 +874,8 @@
       });
 
       if (!isNaN(options.magnifierScale)) {
-        var _iteratorNormalCompletion = true;
-        var _didIteratorError = false;
-        var _iteratorError = undefined;
-
-        try {
-          for (var _iterator = pages[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-            var page = _step.value;
-            page.map = {};
-          }
-        } catch (err) {
-          _didIteratorError = true;
-          _iteratorError = err;
-        } finally {
-          try {
-            if (!_iteratorNormalCompletion && _iterator.return) {
-              _iterator.return();
-            }
-          } finally {
-            if (_didIteratorError) {
-              throw _iteratorError;
-            }
-          }
+        for (var i = 0; i < pages.length; i++) {
+          pages[i].map = {};
         }
 
         installMagnifier(book, canvas, render, images, W, H, {

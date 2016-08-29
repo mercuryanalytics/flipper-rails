@@ -524,12 +524,13 @@ export default function flipper(book, pages, data, options = {}) {
   const canvas = book.appendChild(document.createElement("canvas"));
   return Promise.all(loadImages(pages))
     .then(function(images) {
+      console.log("Pages", pages);
       const [W, H, scale] = computeEmbedSize(images[0], options.scale);
       const spotsize = W * options.spotsize;
 
       const render = createRenderer(canvas, dataset, { width: W, height: H, scale: scale });
       if (!isNaN(options.magnifierScale)) {
-        for (let page of pages) page.map = {};
+        for (let i = 0; i < pages.length; i++) pages[i].map = {};
         installMagnifier(book, canvas, render, images, W, H, {
           scale: options.magnifierScale,
           width: options.magnifierWidth || options.magnifierHeight || options.magnifierRadius*2,
