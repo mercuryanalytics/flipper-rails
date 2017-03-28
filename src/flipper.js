@@ -62,7 +62,7 @@ function computeEmbedSize(image, scale) {
     height = Math.floor(width / aspect);
   }
 
-  return [width/2, height, height / image.naturalHeight];
+  return [width/2, height];
 }
 
 function animate(renderFrame, duration) {
@@ -521,11 +521,18 @@ export default function flipper(book, pages, data, options = {}) {
   }
   Object.defineProperty(pages, 'fields', { value: pageFields });
 
+  function scaleCoords(coords, xScale, yScale) {
+    return coords.map((x, k) => {
+      if (k % 2 == 0) return x * xScale;
+      return x * yScale;
+    });
+  }
+
   const canvas = book.appendChild(document.createElement("canvas"));
   return Promise.all(loadImages(pages))
     .then(function(images) {
-      console.log("Pages", pages);
-      const [W, H, scale] = computeEmbedSize(images[0], options.scale);
+      const [W, H] = computeEmbedSize(images[0], options.scale);
+      const scale = H / images[0].naturalHeight;
       const spotsize = W * options.spotsize;
 
       const render = createRenderer(canvas, dataset, { width: W, height: H, scale: scale });
@@ -536,6 +543,16 @@ export default function flipper(book, pages, data, options = {}) {
           width: options.magnifierWidth || options.magnifierHeight || options.magnifierRadius*2,
           height: options.magnifierHeight || options.magnifierWidth || options.magnifierRadius*2,
           borderRadius: options.magnifierCornerRadius,
+        });
+      } else {
+        pages.forEach((page, i) => {
+          const pageXScale = images[0].naturalWidth / images[i].naturalWidth;
+          const pageYScale = images[0].naturalHeight / images[i].naturalHeight;
+          for (let key of Object.keys(page.map)) {
+            page.map[key].forEach(shape => {
+              shape.coords = scaleCoords(shape.coords, pageXScale, pageYScale);
+            });
+          }
         });
       }
 
