@@ -379,6 +379,7 @@ function createRenderer(canvas, dataset, { width, height, scale }) {
   renderer.nearestCorner = nearestCorner;
   renderer.oppositeCorner = oppositeCorner;
   renderer.toLocalCoordinates = toLocalCoordinates;
+  renderer.dimensions = { width, height, topMargin, bottomMargin };
   return renderer;
 }
 
@@ -729,5 +730,7 @@ export default function flipper(book, pages, data, options = {}) {
         }
         rerender();
       });
+
+      return render.dimensions;
     });
 }

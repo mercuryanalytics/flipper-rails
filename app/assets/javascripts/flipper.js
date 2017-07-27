@@ -517,6 +517,7 @@
     renderer.nearestCorner = nearestCorner;
     renderer.oppositeCorner = oppositeCorner;
     renderer.toLocalCoordinates = toLocalCoordinates;
+    renderer.dimensions = { width: width, height: height, topMargin: topMargin, bottomMargin: bottomMargin };
     return renderer;
   }
 
@@ -960,6 +961,8 @@
         }
         rerender();
       });
+
+      return render.dimensions;
     });
   }
 });
