@@ -704,8 +704,11 @@
       });
     }
 
-    var canvas = book.appendChild(document.createElement("canvas"));
     return Promise.all(loadImages(pages)).then(function (images) {
+      while (book.firstChild) {
+        book.removeChild(book.firstChild);
+      }var canvas = book.appendChild(document.createElement("canvas"));
+
       var _computeEmbedSize = computeEmbedSize(images[0], options.scale),
           _computeEmbedSize2 = _slicedToArray(_computeEmbedSize, 2),
           W = _computeEmbedSize2[0],

@@ -529,9 +529,10 @@ export default function flipper(book, pages, data, options = {}) {
     });
   }
 
-  const canvas = book.appendChild(document.createElement("canvas"));
   return Promise.all(loadImages(pages))
     .then(function(images) {
+      while (book.firstChild) book.removeChild(book.firstChild);
+      const canvas = book.appendChild(document.createElement("canvas"));
       const [W, H] = computeEmbedSize(images[0], options.scale);
       const scale = H / images[0].naturalHeight;
       const spotsize = W * options.spotsize;
