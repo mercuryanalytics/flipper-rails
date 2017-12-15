@@ -67,7 +67,7 @@ function computeEmbedSize(image, scale) {
 
 function animate(renderFrame, duration) {
   return new Promise((resolve) => {
-    let startTime = undefined;
+    let start = undefined;
     const tick = function(now) {
       const time = Math.min((now - start) / duration, 1);
       renderFrame(time);
@@ -531,7 +531,7 @@ export default function flipper(book, pages, data, options = {}) {
 
   return Promise.all(loadImages(pages))
     .then(function(images) {
-      const start = performance.now();
+      const startTime = performance.now();
       while (book.firstChild) book.removeChild(book.firstChild);
       const canvas = book.appendChild(document.createElement("canvas"));
       const [W, H] = computeEmbedSize(images[0], options.scale);

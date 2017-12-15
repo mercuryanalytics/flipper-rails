@@ -131,7 +131,7 @@
 
   function animate(renderFrame, duration) {
     return new Promise(function (resolve) {
-      var startTime = undefined;
+      var start = undefined;
       var tick = function tick(now) {
         var time = Math.min((now - start) / duration, 1);
         renderFrame(time);
@@ -705,7 +705,7 @@
     }
 
     return Promise.all(loadImages(pages)).then(function (images) {
-      var start = performance.now();
+      var startTime = performance.now();
       while (book.firstChild) {
         book.removeChild(book.firstChild);
       }var canvas = book.appendChild(document.createElement("canvas"));
