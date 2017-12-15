@@ -67,7 +67,7 @@ function computeEmbedSize(image, scale) {
 
 function animate(renderFrame, duration) {
   return new Promise((resolve) => {
-    let start = undefined;
+    let startTime = undefined;
     const tick = function(now) {
       const time = Math.min((now - start) / duration, 1);
       renderFrame(time);
@@ -531,6 +531,7 @@ export default function flipper(book, pages, data, options = {}) {
 
   return Promise.all(loadImages(pages))
     .then(function(images) {
+      const start = performance.now();
       while (book.firstChild) book.removeChild(book.firstChild);
       const canvas = book.appendChild(document.createElement("canvas"));
       const [W, H] = computeEmbedSize(images[0], options.scale);
@@ -725,7 +726,7 @@ export default function flipper(book, pages, data, options = {}) {
         hits.forEach((k) => { sel[k] = !sel[k]; });
         const totalSelected = Object.keys(sel).reduce((sum, val) => sum + (sel[val] ? 1 : 0), 0)
 
-        if (book.dispatchEvent(new CustomEvent("change", { cancelable: true, detail: { currentPage: currentPage / 2, lastPage: !pages[currentPage+1], selection: sel, changed: hits }}))) {
+        if (book.dispatchEvent(new CustomEvent("change", { cancelable: true, detail: { currentPage: currentPage / 2, lastPage: !pages[currentPage+1], selection: sel, changed: hits, elapsedTime: performance.now() - startTime }}))) {
           dataset.selection = sel;
           book.dispatchEvent(new CustomEvent("update", { detail: sel }));
         }

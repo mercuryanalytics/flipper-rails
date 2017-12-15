@@ -131,7 +131,7 @@
 
   function animate(renderFrame, duration) {
     return new Promise(function (resolve) {
-      var start = undefined;
+      var startTime = undefined;
       var tick = function tick(now) {
         var time = Math.min((now - start) / duration, 1);
         renderFrame(time);
@@ -705,6 +705,7 @@
     }
 
     return Promise.all(loadImages(pages)).then(function (images) {
+      var start = performance.now();
       while (book.firstChild) {
         book.removeChild(book.firstChild);
       }var canvas = book.appendChild(document.createElement("canvas"));
@@ -958,7 +959,7 @@
           return sum + (sel[val] ? 1 : 0);
         }, 0);
 
-        if (book.dispatchEvent(new CustomEvent("change", { cancelable: true, detail: { currentPage: currentPage / 2, lastPage: !pages[currentPage + 1], selection: sel, changed: hits } }))) {
+        if (book.dispatchEvent(new CustomEvent("change", { cancelable: true, detail: { currentPage: currentPage / 2, lastPage: !pages[currentPage + 1], selection: sel, changed: hits, elapsedTime: performance.now() - startTime } }))) {
           dataset.selection = sel;
           book.dispatchEvent(new CustomEvent("update", { detail: sel }));
         }
