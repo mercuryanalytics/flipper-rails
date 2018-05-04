@@ -45,8 +45,9 @@ function pointInPolygon(x, y, coords) {
 }
 
 
-function computeEmbedSize(image, scale) {
+function computeEmbedSize(image, scale, singlePage = false) {
   if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight, 1];
+  const n = singlePage ? 1 : 2;
 
   const W = window.innerWidth;
   const H = window.innerHeight;
@@ -54,7 +55,7 @@ function computeEmbedSize(image, scale) {
   const availableWidth = scale * W;
   const availableHeight = scale * H;
 
-  const aspect = (2*image.naturalWidth) / image.naturalHeight;
+  const aspect = (n*image.naturalWidth) / image.naturalHeight;
   let height = Math.floor(availableHeight);
   let width = Math.floor(height * aspect);
   if (width > availableWidth) {
@@ -62,7 +63,7 @@ function computeEmbedSize(image, scale) {
     height = Math.floor(width / aspect);
   }
 
-  return [width/2, height];
+  return [width/n, height];
 }
 
 function animate(renderFrame, duration) {
@@ -81,6 +82,117 @@ function animate(renderFrame, duration) {
   })
 }
 
+function gradient(ctx, from, to, mid, strength) {
+  if (strength === null || strength === undefined) strength = .5;
+  const fx = from.x;
+  const fy = from.y;
+  const tx = to.x;
+  const ty = to.y;
+  const result = ctx.createLinearGradient(fx, fy, fx + strength * (tx - fx), fy + strength * (ty - fy));
+  result.addColorStop(0, `rgba(0,0,0,${mid.toFixed(4)})`);
+  result.addColorStop(1, "rgba(0,0,0,0)");
+  return result;
+}
+
+const makeShapeRenderers = h2 => ({
+  circle(ctx, x0, coords) {
+    const [x,y,r] = coords;
+    ctx.arc(x0 + x, y - h2, r, 0, 2*Math.PI, false);
+  },
+
+  rect(ctx, x0, coords) {
+    const [x1,y1,x2,y2] = coords;
+    ctx.rect(x0 + x1, y1 - h2, x2 - x1, y2 - y1);
+  },
+
+  poly(ctx, x0, coords) {
+    ctx.beginPath();
+    ctx.moveTo(x0 + coords[0], coords[1] - h2);
+    for (let i = 2; i < coords.length; i += 2) {
+      ctx.lineTo(x0 + coords[i], coords[i + 1] - h2);
+    }
+    ctx.closePath();
+  },
+});
+
+function isTouchEvent(event) { return event.type && event.type.substr(0, 5) === "touch" }
+
+function createSinglePageRenderer(canvas, dataset, { width, height, scale }) {
+  const w = width;
+  const h = height;
+  const h2 = h/2;
+
+  canvas.width = w;
+  canvas.height = h;
+  canvas.style.marginTop = 0;
+  canvas.style.marginBottom = 0;
+  canvas.style.marginLeft = 0;
+  canvas.style.marginRight = 0;
+  canvas.style.padding = 0;
+
+  function toLocalCoordinates(mouse) {
+    const timeStamp = mouse.timeStamp;
+    if (isTouchEvent(mouse)) mouse = mouse.changedTouches[0];
+    const x = mouse.clientX;
+    const y = mouse.clientY;
+    const { left, top } = canvas.getBoundingClientRect();
+    return { x: x - left, y: y - top - h2, timeStamp };
+  }
+
+  const shapeRenderers = makeShapeRenderers(h2);
+
+  function shapeStyler(s, style) {
+    const color = style.color;
+    if (dataset.hover[s]) {
+      if (dataset.selection[s]) return (ctx) => { ctx.fillStyle = color; ctx.globalAlpha = 0.5; };
+      return (ctx) => { ctx.fillStyle = color; ctx.globalAlpha = 0.3; };
+    }
+    if (dataset.selection[s]) return (ctx) => { ctx.fillStyle = color; ctx.globalAlpha = 0.4; };
+    return (ctx) => { ctx.globalAlpha = 0.0; };
+  }
+
+  function renderAreas(map, ctx, x) {
+    const renderer = (shape) => (ctx, x, coords, setStyle) => {
+      ctx.save();
+      setStyle(ctx);
+      ctx.beginPath();
+      shapeSelector(shapeRenderers, shape)(ctx, x, coords.map((x) => x*scale));
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    };
+
+    const style = window.getComputedStyle(ctx.canvas);
+    iterate(map, (name, areas) => areas.forEach((area) => renderer(area.shape)(ctx, x, area.coords, shapeStyler(name, style))));
+  }
+
+  function renderPage(ctx, image, map) {
+    ctx.drawImage(image, -w, -h2, w, h);
+    ctx.beginPath();
+    ctx.moveTo(0, -h2);
+    ctx.lineTo(0, h2);
+    ctx.lineTo(-w, h2);
+    ctx.lineTo(-w, -h2);
+    ctx.closePath();
+    renderAreas(map, ctx, -w);
+    ctx.fillStyle = gradient(ctx, {x:0, y:0}, {x:-w, y:0}, .1, .05);
+    ctx.fill();
+  }
+
+  function renderer(image, page) {
+    const ctx = canvas.getContext("2d");
+    ctx.save();
+    ctx.translate(w, h2);
+    ctx.clearRect(-w, -h2, 2*w, h);
+    renderPage(ctx, image, page.map)
+    ctx.restore();
+  }
+
+  renderer.toLocalCoordinates = toLocalCoordinates;
+  renderer.dimensions = { width, height, topMargin: 0, bottomMargin: 0 };
+  return renderer;
+}
+
 function createRenderer(canvas, dataset, { width, height, scale }) {
   const w = width;
   const h = height;
@@ -96,7 +208,6 @@ function createRenderer(canvas, dataset, { width, height, scale }) {
   canvas.style.marginRight = 0;
   canvas.style.padding = 0;
 
-  function isTouchEvent(event) { return event.type && event.type.substr(0, 5) === "touch" }
   function toLocalCoordinates(mouse) {
     const timeStamp = mouse.timeStamp;
     if (isTouchEvent(mouse)) mouse = mouse.changedTouches[0];
@@ -252,38 +363,7 @@ function createRenderer(canvas, dataset, { width, height, scale }) {
     return corner.transform(x, y, (-h2-my)*t/g+mx, (h2-my)*t/g+mx, (-w-mx)*g/t+my, (w-mx)*g/t+my);
   }
 
-  function gradient(ctx, from, to, mid, strength) {
-    if (strength === null || strength === undefined) strength = .5;
-    const fx = from.x;
-    const fy = from.y;
-    const tx = to.x;
-    const ty = to.y;
-    const result = ctx.createLinearGradient(fx, fy, fx + strength * (tx - fx), fy + strength * (ty - fy));
-    result.addColorStop(0, `rgba(0,0,0,${mid.toFixed(4)})`);
-    result.addColorStop(1, "rgba(0,0,0,0)");
-    return result;
-  }
-
-  const shapeRenderers = {
-    circle(ctx, x0, coords) {
-      const [x,y,r] = coords;
-      ctx.arc(x0 + x, y - h2, r, 0, 2*Math.PI, false);
-    },
-
-    rect(ctx, x0, coords) {
-      const [x1,y1,x2,y2] = coords;
-      ctx.rect(x0 + x1, y1 - h2, x2 - x1, y2 - y1);
-    },
-
-    poly(ctx, x0, coords) {
-      ctx.beginPath();
-      ctx.moveTo(x0 + coords[0], coords[1] - h2);
-      for (let i = 2; i < coords.length; i += 2) {
-        ctx.lineTo(x0 + coords[i], coords[i + 1] - h2);
-      }
-      ctx.closePath();
-    },
-  }
+  const shapeRenderers = makeShapeRenderers(h2);
 
   function shapeStyler(s, style) {
     const color = style.color;
@@ -448,7 +528,7 @@ function installMagnifier(book, canvas, render, images, W, H, options) {
   canvas.addEventListener("mouseover", showMagnifier);
   const moveMagnifier = (event) => {
     const mouse = render.toLocalCoordinates(event);
-    const x = W;
+    const x = (images.length === 1 ? 0 : W);
     const y = H/2;
     magnifier.style.left = `${x + mouse.x - width/2}px`;
     magnifier.style.top = `${y + mouse.y - height/2}px`;
@@ -489,7 +569,135 @@ function normalizeIndex(index, modulus) {
 
 function even(x) { return (x & 1) === 0; }
 
+function scaleCoords(coords, xScale, yScale) {
+  return coords.map((x, k) => {
+    if (k % 2 == 0) return x * xScale;
+    return x * yScale;
+  });
+}
+
+const hitTesters = {
+  circle(mouse, coords) {
+    const [x, y, r] = coords;
+    return Math.hypot(mouse.x - x, mouse.y - y) <= r;
+  },
+
+  rect(mouse, coords) {
+    const [x1,y1,x2,y2] = coords;
+    return x1 <= mouse.x && mouse.x <= x2 && y1 <= mouse.y && mouse.y <= y2;
+  },
+
+  poly(mouse, coords) {
+    return pointInPolygon(mouse.x, mouse.y, coords);
+  },
+};
+
+function singlePageFlipper(book, page, data, options) {
+  page = typeof page === 'string' ? { image: page, map: {} } : Object.assign({ map: {} }, page);
+  let pages = [page];
+  options = Object.assign(DEFAULT_OPTIONS, options);
+
+  const dataset = { selection: Object.assign(initialSelection(pages), data), hover: {} };
+  let rerender = () => {};
+
+  book.style.position = "relative";
+  const fieldNames = Object.keys(dataset.selection);
+  Object.defineProperty(book, 'selection', {
+    get: () => dataset.selection,
+    set: (sel) => {
+      dataset.selection = Object.assign(initialSelection(pages), sel);
+      rerender();
+    }
+  });
+
+  Object.defineProperty(book, 'currentPage', { get: () => 0 });
+  Object.defineProperty(book, 'layout', { get: () => pages });
+  Object.defineProperty(pages, 'fields', { value: () => Object.keys(dataset.selection) });
+
+  return loadImage(page.image)
+    .then(function(image) {
+      const startTime = performance.now();
+      while (book.firstChild) book.removeChild(book.firstChild);
+      const canvas = book.appendChild(document.createElement("canvas"));
+      const [W, H] = computeEmbedSize(image, options.scale, true);
+      const scale = H / image.naturalHeight;
+      const spotsize = W * options.spotsize;
+
+      const images = [image];
+      const render = createSinglePageRenderer(canvas, dataset, { width: W, height: H, scale: scale });
+      if (!isNaN(options.magnifierScale)) {
+        for (let i = 0; i < pages.length; i++) pages[i].map = {};
+        installMagnifier(book, canvas, render, images, W, H, {
+          scale: options.magnifierScale,
+          width: options.magnifierWidth || options.magnifierHeight || options.magnifierRadius*2,
+          height: options.magnifierHeight || options.magnifierWidth || options.magnifierRadius*2,
+          borderRadius: options.magnifierCornerRadius,
+        });
+      }
+
+      rerender = () => { render(image, page); }
+      rerender();
+
+      book.addEventListener("mousemove", (event) => {
+        let changed = false;
+        const newHover = {};
+
+        const hitTester = (mouse) => (name, areas) => {
+          if (areas.some((area) => shapeSelector(hitTesters, area.shape)(mouse, area.coords.map((x) => x*scale)))) newHover[name] = true;
+          changed |= (!!newHover[name] != !!dataset.hover[name])
+        };
+
+        const mouse = render.toLocalCoordinates(event);
+        mouse.y += H/2;
+        iterate(page.map, hitTester(mouse));
+        mouse.x += W;
+
+        if (changed) {
+          dataset.hover = newHover;
+          rerender();
+        }
+      });
+
+      let timeout;
+      window.addEventListener("scroll", (event) => {
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(() => rerender(), 10);
+      })
+      book.addEventListener("click", (event) => {
+        let hits = Object.keys(dataset.hover).filter((k) => dataset.hover[k]);
+        if (hits.length === 0) return;
+        const sel = Object.assign({}, dataset.selection);
+        const clearMisses = (k) => { if (hits.indexOf(k) < 0) sel[k] = false; }
+        switch (options.mode) {
+        case 'single':
+          hits = hits.slice(0, 1);
+          fieldNames.forEach(clearMisses);
+          break;
+        case 'multiple':
+          break;
+        default: // one per page
+          hits = hits.slice(0, 1);
+          Object.keys(page.map).forEach(clearMisses);
+          break;
+        }
+
+        hits.forEach((k) => { sel[k] = !sel[k]; });
+        const totalSelected = Object.keys(sel).reduce((sum, val) => sum + (sel[val] ? 1 : 0), 0)
+
+        if (book.dispatchEvent(new CustomEvent("change", { cancelable: true, detail: { currentPage: 0, lastPage: true, selection: sel, changed: hits, elapsedTime: performance.now() - startTime }}))) {
+          dataset.selection = sel;
+          book.dispatchEvent(new CustomEvent("update", { detail: sel }));
+        }
+        rerender();
+      });
+
+      return render.dimensions;
+    });
+}
+
 export default function flipper(book, pages, data, options = {}) {
+  if (pages.length === 1) return singlePageFlipper(book, pages[0], data, options);
+
   pages = pages.map((page) => typeof page === 'string' ? { image: page, map: {} } : Object.assign({ map: {} }, page));
   options = Object.assign(DEFAULT_OPTIONS, options);
 
@@ -521,13 +729,6 @@ export default function flipper(book, pages, data, options = {}) {
     return Object.keys(result);
   }
   Object.defineProperty(pages, 'fields', { value: pageFields });
-
-  function scaleCoords(coords, xScale, yScale) {
-    return coords.map((x, k) => {
-      if (k % 2 == 0) return x * xScale;
-      return x * yScale;
-    });
-  }
 
   return Promise.all(loadImages(pages))
     .then(function(images) {
@@ -661,23 +862,6 @@ export default function flipper(book, pages, data, options = {}) {
 
       book.addEventListener("mousedown", (event) => { event.preventDefault(); animateCorner(render.toLocalCoordinates(event)); });
       book.addEventListener("touchstart", (event) => { event.preventDefault(); animateCorner(render.toLocalCoordinates(event)); });
-
-      const hitTesters = {
-        circle(mouse, coords) {
-          const [x, y, r] = coords;
-          return Math.hypot(mouse.x - x, mouse.y - y) <= r;
-        },
-
-        rect(mouse, coords) {
-          const [x1,y1,x2,y2] = coords;
-          return x1 <= mouse.x && mouse.x <= x2 && y1 <= mouse.y && mouse.y <= y2;
-        },
-
-        poly(mouse, coords) {
-          return pointInPolygon(mouse.x, mouse.y, coords);
-        },
-      }
-
       book.addEventListener("mousemove", (event) => {
         let changed = false;
         const newHover = {};

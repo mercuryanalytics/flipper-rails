@@ -110,7 +110,10 @@
   }
 
   function computeEmbedSize(image, scale) {
+    var singlePage = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
+
     if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight, 1];
+    var n = singlePage ? 1 : 2;
 
     var W = window.innerWidth;
     var H = window.innerHeight;
@@ -118,7 +121,7 @@
     var availableWidth = scale * W;
     var availableHeight = scale * H;
 
-    var aspect = 2 * image.naturalWidth / image.naturalHeight;
+    var aspect = n * image.naturalWidth / image.naturalHeight;
     var height = Math.floor(availableHeight);
     var width = Math.floor(height * aspect);
     if (width > availableWidth) {
@@ -126,7 +129,7 @@
       height = Math.floor(width / aspect);
     }
 
-    return [width / 2, height];
+    return [width / n, height];
   }
 
   function animate(renderFrame, duration) {
@@ -147,10 +150,156 @@
     });
   }
 
-  function createRenderer(canvas, dataset, _ref) {
+  function gradient(ctx, from, to, mid, strength) {
+    if (strength === null || strength === undefined) strength = .5;
+    var fx = from.x;
+    var fy = from.y;
+    var tx = to.x;
+    var ty = to.y;
+    var result = ctx.createLinearGradient(fx, fy, fx + strength * (tx - fx), fy + strength * (ty - fy));
+    result.addColorStop(0, "rgba(0,0,0," + mid.toFixed(4) + ")");
+    result.addColorStop(1, "rgba(0,0,0,0)");
+    return result;
+  }
+
+  var makeShapeRenderers = function makeShapeRenderers(h2) {
+    return {
+      circle: function circle(ctx, x0, coords) {
+        var _coords = _slicedToArray(coords, 3),
+            x = _coords[0],
+            y = _coords[1],
+            r = _coords[2];
+
+        ctx.arc(x0 + x, y - h2, r, 0, 2 * Math.PI, false);
+      },
+      rect: function rect(ctx, x0, coords) {
+        var _coords2 = _slicedToArray(coords, 4),
+            x1 = _coords2[0],
+            y1 = _coords2[1],
+            x2 = _coords2[2],
+            y2 = _coords2[3];
+
+        ctx.rect(x0 + x1, y1 - h2, x2 - x1, y2 - y1);
+      },
+      poly: function poly(ctx, x0, coords) {
+        ctx.beginPath();
+        ctx.moveTo(x0 + coords[0], coords[1] - h2);
+        for (var i = 2; i < coords.length; i += 2) {
+          ctx.lineTo(x0 + coords[i], coords[i + 1] - h2);
+        }
+        ctx.closePath();
+      }
+    };
+  };
+
+  function isTouchEvent(event) {
+    return event.type && event.type.substr(0, 5) === "touch";
+  }
+
+  function createSinglePageRenderer(canvas, dataset, _ref) {
     var width = _ref.width,
         height = _ref.height,
         scale = _ref.scale;
+
+    var w = width;
+    var h = height;
+    var h2 = h / 2;
+
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.marginTop = 0;
+    canvas.style.marginBottom = 0;
+    canvas.style.marginLeft = 0;
+    canvas.style.marginRight = 0;
+    canvas.style.padding = 0;
+
+    function toLocalCoordinates(mouse) {
+      var timeStamp = mouse.timeStamp;
+      if (isTouchEvent(mouse)) mouse = mouse.changedTouches[0];
+      var x = mouse.clientX;
+      var y = mouse.clientY;
+
+      var _canvas$getBoundingCl = canvas.getBoundingClientRect(),
+          left = _canvas$getBoundingCl.left,
+          top = _canvas$getBoundingCl.top;
+
+      return { x: x - left, y: y - top - h2, timeStamp: timeStamp };
+    }
+
+    var shapeRenderers = makeShapeRenderers(h2);
+
+    function shapeStyler(s, style) {
+      var color = style.color;
+      if (dataset.hover[s]) {
+        if (dataset.selection[s]) return function (ctx) {
+          ctx.fillStyle = color;ctx.globalAlpha = 0.5;
+        };
+        return function (ctx) {
+          ctx.fillStyle = color;ctx.globalAlpha = 0.3;
+        };
+      }
+      if (dataset.selection[s]) return function (ctx) {
+        ctx.fillStyle = color;ctx.globalAlpha = 0.4;
+      };
+      return function (ctx) {
+        ctx.globalAlpha = 0.0;
+      };
+    }
+
+    function renderAreas(map, ctx, x) {
+      var renderer = function renderer(shape) {
+        return function (ctx, x, coords, setStyle) {
+          ctx.save();
+          setStyle(ctx);
+          ctx.beginPath();
+          shapeSelector(shapeRenderers, shape)(ctx, x, coords.map(function (x) {
+            return x * scale;
+          }));
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        };
+      };
+
+      var style = window.getComputedStyle(ctx.canvas);
+      iterate(map, function (name, areas) {
+        return areas.forEach(function (area) {
+          return renderer(area.shape)(ctx, x, area.coords, shapeStyler(name, style));
+        });
+      });
+    }
+
+    function renderPage(ctx, image, map) {
+      ctx.drawImage(image, -w, -h2, w, h);
+      ctx.beginPath();
+      ctx.moveTo(0, -h2);
+      ctx.lineTo(0, h2);
+      ctx.lineTo(-w, h2);
+      ctx.lineTo(-w, -h2);
+      ctx.closePath();
+      renderAreas(map, ctx, -w);
+      ctx.fillStyle = gradient(ctx, { x: 0, y: 0 }, { x: -w, y: 0 }, .1, .05);
+      ctx.fill();
+    }
+
+    function renderer(image, page) {
+      var ctx = canvas.getContext("2d");
+      ctx.save();
+      ctx.translate(w, h2);
+      ctx.clearRect(-w, -h2, 2 * w, h);
+      renderPage(ctx, image, page.map);
+      ctx.restore();
+    }
+
+    renderer.toLocalCoordinates = toLocalCoordinates;
+    renderer.dimensions = { width: width, height: height, topMargin: 0, bottomMargin: 0 };
+    return renderer;
+  }
+
+  function createRenderer(canvas, dataset, _ref2) {
+    var width = _ref2.width,
+        height = _ref2.height,
+        scale = _ref2.scale;
 
     var w = width;
     var h = height;
@@ -166,18 +315,15 @@
     canvas.style.marginRight = 0;
     canvas.style.padding = 0;
 
-    function isTouchEvent(event) {
-      return event.type && event.type.substr(0, 5) === "touch";
-    }
     function toLocalCoordinates(mouse) {
       var timeStamp = mouse.timeStamp;
       if (isTouchEvent(mouse)) mouse = mouse.changedTouches[0];
       var x = mouse.clientX;
       var y = mouse.clientY;
 
-      var _canvas$getBoundingCl = canvas.getBoundingClientRect(),
-          left = _canvas$getBoundingCl.left,
-          top = _canvas$getBoundingCl.top;
+      var _canvas$getBoundingCl2 = canvas.getBoundingClientRect(),
+          left = _canvas$getBoundingCl2.left,
+          top = _canvas$getBoundingCl2.top;
 
       return { x: x - left - w, y: y - top - h2 - topMargin, timeStamp: timeStamp };
     }
@@ -359,45 +505,7 @@
       return corner.transform(x, y, (-h2 - my) * t / g + mx, (h2 - my) * t / g + mx, (-w - mx) * g / t + my, (w - mx) * g / t + my);
     }
 
-    function gradient(ctx, from, to, mid, strength) {
-      if (strength === null || strength === undefined) strength = .5;
-      var fx = from.x;
-      var fy = from.y;
-      var tx = to.x;
-      var ty = to.y;
-      var result = ctx.createLinearGradient(fx, fy, fx + strength * (tx - fx), fy + strength * (ty - fy));
-      result.addColorStop(0, "rgba(0,0,0," + mid.toFixed(4) + ")");
-      result.addColorStop(1, "rgba(0,0,0,0)");
-      return result;
-    }
-
-    var shapeRenderers = {
-      circle: function circle(ctx, x0, coords) {
-        var _coords = _slicedToArray(coords, 3),
-            x = _coords[0],
-            y = _coords[1],
-            r = _coords[2];
-
-        ctx.arc(x0 + x, y - h2, r, 0, 2 * Math.PI, false);
-      },
-      rect: function rect(ctx, x0, coords) {
-        var _coords2 = _slicedToArray(coords, 4),
-            x1 = _coords2[0],
-            y1 = _coords2[1],
-            x2 = _coords2[2],
-            y2 = _coords2[3];
-
-        ctx.rect(x0 + x1, y1 - h2, x2 - x1, y2 - y1);
-      },
-      poly: function poly(ctx, x0, coords) {
-        ctx.beginPath();
-        ctx.moveTo(x0 + coords[0], coords[1] - h2);
-        for (var i = 2; i < coords.length; i += 2) {
-          ctx.lineTo(x0 + coords[i], coords[i + 1] - h2);
-        }
-        ctx.closePath();
-      }
-    };
+    var shapeRenderers = makeShapeRenderers(h2);
 
     function shapeStyler(s, style) {
       var color = style.color;
@@ -607,7 +715,7 @@
     canvas.addEventListener("mouseover", showMagnifier);
     var moveMagnifier = function moveMagnifier(event) {
       var mouse = render.toLocalCoordinates(event);
-      var x = W;
+      var x = images.length === 1 ? 0 : W;
       var y = H / 2;
       magnifier.style.left = x + mouse.x - width / 2 + "px";
       magnifier.style.top = y + mouse.y - height / 2 + "px";
@@ -650,8 +758,176 @@
     return (x & 1) === 0;
   }
 
+  function scaleCoords(coords, xScale, yScale) {
+    return coords.map(function (x, k) {
+      if (k % 2 == 0) return x * xScale;
+      return x * yScale;
+    });
+  }
+
+  var hitTesters = {
+    circle: function circle(mouse, coords) {
+      var _coords3 = _slicedToArray(coords, 3),
+          x = _coords3[0],
+          y = _coords3[1],
+          r = _coords3[2];
+
+      return Math.hypot(mouse.x - x, mouse.y - y) <= r;
+    },
+    rect: function rect(mouse, coords) {
+      var _coords4 = _slicedToArray(coords, 4),
+          x1 = _coords4[0],
+          y1 = _coords4[1],
+          x2 = _coords4[2],
+          y2 = _coords4[3];
+
+      return x1 <= mouse.x && mouse.x <= x2 && y1 <= mouse.y && mouse.y <= y2;
+    },
+    poly: function poly(mouse, coords) {
+      return pointInPolygon(mouse.x, mouse.y, coords);
+    }
+  };
+
+  function singlePageFlipper(book, page, data, options) {
+    page = typeof page === 'string' ? { image: page, map: {} } : Object.assign({ map: {} }, page);
+    var pages = [page];
+    options = Object.assign(DEFAULT_OPTIONS, options);
+
+    var dataset = { selection: Object.assign(initialSelection(pages), data), hover: {} };
+    var rerender = function rerender() {};
+
+    book.style.position = "relative";
+    var fieldNames = Object.keys(dataset.selection);
+    Object.defineProperty(book, 'selection', {
+      get: function get() {
+        return dataset.selection;
+      },
+      set: function set(sel) {
+        dataset.selection = Object.assign(initialSelection(pages), sel);
+        rerender();
+      }
+    });
+
+    Object.defineProperty(book, 'currentPage', { get: function get() {
+        return 0;
+      } });
+    Object.defineProperty(book, 'layout', { get: function get() {
+        return pages;
+      } });
+    Object.defineProperty(pages, 'fields', { value: function value() {
+        return Object.keys(dataset.selection);
+      } });
+
+    return loadImage(page.image).then(function (image) {
+      var startTime = performance.now();
+      while (book.firstChild) {
+        book.removeChild(book.firstChild);
+      }var canvas = book.appendChild(document.createElement("canvas"));
+
+      var _computeEmbedSize = computeEmbedSize(image, options.scale, true),
+          _computeEmbedSize2 = _slicedToArray(_computeEmbedSize, 2),
+          W = _computeEmbedSize2[0],
+          H = _computeEmbedSize2[1];
+
+      var scale = H / image.naturalHeight;
+      var spotsize = W * options.spotsize;
+
+      var images = [image];
+      var render = createSinglePageRenderer(canvas, dataset, { width: W, height: H, scale: scale });
+      if (!isNaN(options.magnifierScale)) {
+        for (var i = 0; i < pages.length; i++) {
+          pages[i].map = {};
+        }installMagnifier(book, canvas, render, images, W, H, {
+          scale: options.magnifierScale,
+          width: options.magnifierWidth || options.magnifierHeight || options.magnifierRadius * 2,
+          height: options.magnifierHeight || options.magnifierWidth || options.magnifierRadius * 2,
+          borderRadius: options.magnifierCornerRadius
+        });
+      }
+
+      rerender = function rerender() {
+        render(image, page);
+      };
+      rerender();
+
+      book.addEventListener("mousemove", function (event) {
+        var changed = false;
+        var newHover = {};
+
+        var hitTester = function hitTester(mouse) {
+          return function (name, areas) {
+            if (areas.some(function (area) {
+              return shapeSelector(hitTesters, area.shape)(mouse, area.coords.map(function (x) {
+                return x * scale;
+              }));
+            })) newHover[name] = true;
+            changed |= !!newHover[name] != !!dataset.hover[name];
+          };
+        };
+
+        var mouse = render.toLocalCoordinates(event);
+        mouse.y += H / 2;
+        iterate(page.map, hitTester(mouse));
+        mouse.x += W;
+
+        if (changed) {
+          dataset.hover = newHover;
+          rerender();
+        }
+      });
+
+      var timeout = void 0;
+      window.addEventListener("scroll", function (event) {
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(function () {
+          return rerender();
+        }, 10);
+      });
+      book.addEventListener("click", function (event) {
+        var hits = Object.keys(dataset.hover).filter(function (k) {
+          return dataset.hover[k];
+        });
+        if (hits.length === 0) return;
+        var sel = Object.assign({}, dataset.selection);
+        var clearMisses = function clearMisses(k) {
+          if (hits.indexOf(k) < 0) sel[k] = false;
+        };
+        switch (options.mode) {
+          case 'single':
+            hits = hits.slice(0, 1);
+            fieldNames.forEach(clearMisses);
+            break;
+          case 'multiple':
+            break;
+          default:
+            // one per page
+            hits = hits.slice(0, 1);
+            Object.keys(page.map).forEach(clearMisses);
+            break;
+        }
+
+        hits.forEach(function (k) {
+          sel[k] = !sel[k];
+        });
+        var totalSelected = Object.keys(sel).reduce(function (sum, val) {
+          return sum + (sel[val] ? 1 : 0);
+        }, 0);
+
+        if (book.dispatchEvent(new CustomEvent("change", { cancelable: true, detail: { currentPage: 0, lastPage: true, selection: sel, changed: hits, elapsedTime: performance.now() - startTime } }))) {
+          dataset.selection = sel;
+          book.dispatchEvent(new CustomEvent("update", { detail: sel }));
+        }
+        rerender();
+      });
+
+      return render.dimensions;
+    });
+  }
+
   function flipper(book, pages, data) {
     var options = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : {};
+
+    if (pages.length === 1) return singlePageFlipper(book, pages[0], data, options);
 
     pages = pages.map(function (page) {
       return typeof page === 'string' ? { image: page, map: {} } : Object.assign({ map: {} }, page);
@@ -697,23 +973,16 @@
     }
     Object.defineProperty(pages, 'fields', { value: pageFields });
 
-    function scaleCoords(coords, xScale, yScale) {
-      return coords.map(function (x, k) {
-        if (k % 2 == 0) return x * xScale;
-        return x * yScale;
-      });
-    }
-
     return Promise.all(loadImages(pages)).then(function (images) {
       var startTime = performance.now();
       while (book.firstChild) {
         book.removeChild(book.firstChild);
       }var canvas = book.appendChild(document.createElement("canvas"));
 
-      var _computeEmbedSize = computeEmbedSize(images[0], options.scale),
-          _computeEmbedSize2 = _slicedToArray(_computeEmbedSize, 2),
-          W = _computeEmbedSize2[0],
-          H = _computeEmbedSize2[1];
+      var _computeEmbedSize3 = computeEmbedSize(images[0], options.scale),
+          _computeEmbedSize4 = _slicedToArray(_computeEmbedSize3, 2),
+          W = _computeEmbedSize4[0],
+          H = _computeEmbedSize4[1];
 
       var scale = H / images[0].naturalHeight;
       var spotsize = W * options.spotsize;
@@ -870,30 +1139,6 @@
       book.addEventListener("touchstart", function (event) {
         event.preventDefault();animateCorner(render.toLocalCoordinates(event));
       });
-
-      var hitTesters = {
-        circle: function circle(mouse, coords) {
-          var _coords3 = _slicedToArray(coords, 3),
-              x = _coords3[0],
-              y = _coords3[1],
-              r = _coords3[2];
-
-          return Math.hypot(mouse.x - x, mouse.y - y) <= r;
-        },
-        rect: function rect(mouse, coords) {
-          var _coords4 = _slicedToArray(coords, 4),
-              x1 = _coords4[0],
-              y1 = _coords4[1],
-              x2 = _coords4[2],
-              y2 = _coords4[3];
-
-          return x1 <= mouse.x && mouse.x <= x2 && y1 <= mouse.y && mouse.y <= y2;
-        },
-        poly: function poly(mouse, coords) {
-          return pointInPolygon(mouse.x, mouse.y, coords);
-        }
-      };
-
       book.addEventListener("mousemove", function (event) {
         var changed = false;
         var newHover = {};
