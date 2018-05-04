@@ -271,12 +271,6 @@
 
     function renderPage(ctx, image, map) {
       ctx.drawImage(image, -w, -h2, w, h);
-      ctx.beginPath();
-      ctx.moveTo(0, -h2);
-      ctx.lineTo(0, h2);
-      ctx.lineTo(-w, h2);
-      ctx.lineTo(-w, -h2);
-      ctx.closePath();
       renderAreas(map, ctx, -w);
       ctx.fillStyle = gradient(ctx, { x: 0, y: 0 }, { x: -w, y: 0 }, .1, .05);
       ctx.fill();
