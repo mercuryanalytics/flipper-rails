@@ -18,6 +18,7 @@
   });
   exports.default = flipper;
 
+  var isTouching = false;
   var _slicedToArray = function () {
     function sliceIterator(arr, i) {
       var _arr = [];
@@ -230,7 +231,7 @@
 
     function shapeStyler(s, style) {
       var color = style.color;
-      if (dataset.hover[s]) {
+      if (!isTouching && dataset.hover[s]) {
         if (dataset.selection[s]) return function (ctx) {
           ctx.fillStyle = color;ctx.globalAlpha = 0.5;
         };
@@ -877,6 +878,7 @@
           return rerender();
         }, 10);
       });
+      book.addEventListener("touchstart", function(event) { isTouching = true; });
       book.addEventListener("click", function (event) {
         var hits = Object.keys(dataset.hover).filter(function (k) {
           return dataset.hover[k];
@@ -1167,6 +1169,7 @@
           return rerender();
         }, 10);
       });
+      book.addEventListener("touchstart", function(event) { isTouching = true; });
       book.addEventListener("click", function (event) {
         var hits = Object.keys(dataset.hover).filter(function (k) {
           return dataset.hover[k];
