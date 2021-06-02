@@ -110,11 +110,24 @@
     return n & 1 === 1;
   }
 
-  function computeEmbedSize(image, scale) {
-    var singlePage = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
-
+  function computeEmbedSize(image, scale, singlePage) {
     if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight, 1];
-    var n = singlePage ? 1 : 2;
+
+    if (singlePage) {
+      var W = window.innerWidth;
+      var H = window.innerHeight;
+
+      var availableWidth = scale * W;
+      var availableHeight = scale * H;
+
+      var aspect = image.naturalWidth / image.naturalHeight;
+      var width = Math.floor(availableWidth);
+      var height = Math.floor(width / aspect);
+
+      return [width, height];
+    }
+
+    var n = 2;
 
     var W = window.innerWidth;
     var H = window.innerHeight;

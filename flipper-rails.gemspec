@@ -1,32 +1,40 @@
-# coding: utf-8
-lib = File.expand_path('../lib', __FILE__)
-$LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'flipper/rails/version'
+# -*- encoding: utf-8 -*-
+# stub: flipper-rails 2.3.4 ruby lib
 
-Gem::Specification.new do |spec|
-  spec.name          = "flipper-rails"
-  spec.version       = Flipper::Rails::VERSION
-  spec.authors       = ["Scott Brickner"]
-  spec.email         = ["scottb@brickner.net"]
+Gem::Specification.new do |s|
+  s.name = "flipper-rails"
+  s.version = "2.4.0"
 
-  spec.summary       = %q{JavaScript flipbook}
-  spec.description   = %q{Renders a set of images as a virtual magazine with animated page turning.}
-  spec.homepage      = "https://github.com/mercuryanalytics/flipbook-rails"
+  s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
+  s.metadata = { "allowed_push_host" => "" } if s.respond_to? :metadata=
+  s.require_paths = ["lib"]
+  s.authors = ["Scott Brickner"]
+  s.bindir = "exe"
+  s.date = "2020-09-20"
+  s.description = "Renders a set of images as a virtual magazine with animated page turning."
+  s.email = ["scottb@brickner.net"]
+  s.files = ["README.md", "app/assets", "app/assets/javascripts", "app/assets/javascripts/flipper.js", "lib/flipper", "lib/flipper/rails", "lib/flipper/rails.rb", "lib/flipper/rails/version.rb"]
+  s.homepage = "https://github.com/mercuryanalytics/flipbook-rails"
+  s.rubygems_version = "2.4.5.2"
+  s.summary = "JavaScript flipbook"
 
-  # Prevent pushing this gem to RubyGems.org by setting 'allowed_push_host', or
-  # delete this section to allow pushing this gem to any host.
-  if spec.respond_to?(:metadata)
-    spec.metadata['allowed_push_host'] = "" #"TODO: Set to 'http://mygemserver.com'"
+  s.installed_by_version = "2.4.5.2" if s.respond_to? :installed_by_version
+
+  if s.respond_to? :specification_version
+    s.specification_version = 4
+
+    if Gem::Version.new(Gem::VERSION) >= Gem::Version.new('1.2.0')
+      s.add_runtime_dependency(%q<railties>, [">= 0"])
+      s.add_development_dependency(%q<bundler>, ["~> 1.10"])
+      s.add_development_dependency(%q<rake>, ["~> 10.0"])
+    else
+      s.add_dependency(%q<railties>, [">= 0"])
+      s.add_dependency(%q<bundler>, ["~> 1.10"])
+      s.add_dependency(%q<rake>, ["~> 10.0"])
+    end
   else
-    raise "RubyGems 2.0 or newer is required to protect against public gem pushes."
+    s.add_dependency(%q<railties>, [">= 0"])
+    s.add_dependency(%q<bundler>, ["~> 1.10"])
+    s.add_dependency(%q<rake>, ["~> 10.0"])
   end
-
-  spec.files         = Dir["{lib,app}/**/*"] + ["README.md"]
-  spec.bindir        = "exe"
-  spec.require_paths = ["lib"]
-
-  spec.add_dependency "railties"
-
-  spec.add_development_dependency "bundler", "~> 1.10"
-  spec.add_development_dependency "rake", "~> 10.0"
 end
