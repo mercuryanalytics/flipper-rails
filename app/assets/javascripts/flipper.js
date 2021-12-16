@@ -1089,6 +1089,7 @@
             target = render.nearestCorner(mouse);
           }
           animating = true;
+          book.addEventListener("mousemove", trackHighlight);
           return animate(dropAnimation(mouse, target, corner, leftPage, rightPage, leftMap, rightMap, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap), 300).then(function () {
             animating = false;
             if (target !== corner) {
@@ -1132,6 +1133,7 @@
           var onMouseMove = dragCorner(corner);
           document.addEventListener("mousemove", onMouseMove, false);
           document.addEventListener("touchmove", onMouseMove, false);
+          book.removeEventListener("mousemove", trackHighlight);
 
           var onMouseUp = dropCorner(corner, onMouseMove, mouse.timeStamp);
           document.addEventListener("mouseup", onMouseUp, false);
@@ -1143,12 +1145,14 @@
       }
 
       book.addEventListener("mousedown", function (event) {
-        event.preventDefault();animateCorner(render.toLocalCoordinates(event));
+        event.preventDefault();
+        animateCorner(render.toLocalCoordinates(event));
       });
       book.addEventListener("touchstart", function (event) {
-        event.preventDefault();animateCorner(render.toLocalCoordinates(event));
+        event.preventDefault();
+        animateCorner(render.toLocalCoordinates(event));
       });
-      book.addEventListener("mousemove", function (event) {
+      function trackHighlight(event) {
         var changed = false;
         var newHover = {};
 
@@ -1173,7 +1177,8 @@
           dataset.hover = newHover;
           rerender();
         }
-      });
+      }
+      book.addEventListener("mousemove", trackHighlight);
 
       var timeout = void 0;
       window.addEventListener("scroll", function (event) {
