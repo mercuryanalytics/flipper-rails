@@ -504,7 +504,7 @@ function installMagnifier(book, canvas, render, images, W, H, options) {
   const renderMagnifier = (page) => {
     const ctx = magCanvas.getContext("2d");
     ctx.save();
-    ctx.clearRect(0, 0, w, h);
+    ctx.clearRect(0, 0, magCanvas.width, magCanvas.height);
     if (page > 0) ctx.drawImage(images[page - 1], 0, 0, w, h);
     if (page < images.length) ctx.drawImage(images[page], w, 0, w, h);
     ctx.restore();
