@@ -982,7 +982,7 @@
         book.removeChild(book.firstChild);
       }var canvas = book.appendChild(document.createElement("canvas"));
 
-      var _computeEmbedSize3 = computeEmbedSize(images[0], options.scale, false),
+      var _computeEmbedSize3 = computeEmbedSize(images[0], options.scale),
           _computeEmbedSize4 = _slicedToArray(_computeEmbedSize3, 2),
           W = _computeEmbedSize4[0],
           H = _computeEmbedSize4[1];

@@ -738,7 +738,7 @@ export default function flipper(book, pages, data, options = {}) {
       const startTime = performance.now();
       while (book.firstChild) book.removeChild(book.firstChild);
       const canvas = book.appendChild(document.createElement("canvas"));
-      const [W, H] = computeEmbedSize(images[0], options.scale, false);
+      const [W, H] = computeEmbedSize(images[0], options.scale);
       const scale = H / images[0].naturalHeight;
       const spotsize = W * options.spotsize;
 
