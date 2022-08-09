@@ -91,6 +91,8 @@
   }
   window.inferBackgroundColor = inferBackgroundColor;
 
+  var isTouching = false;
+
   function pointInPolygon(x, y, coords) {
     function crosses(x1, y1, x2, y2) {
       if (y1 <= y && y2 > y || y1 > y && y2 <= y) {
@@ -109,19 +111,23 @@
     return n & 1 === 1;
   }
 
-  function computeEmbedSize(image, scale) {
-    var singlePage = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
-
+  function computeEmbedSize(image, scale, singlePage) {
     if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight, 1];
-    var n = singlePage ? 1 : 2;
-
     var W = window.innerWidth;
     var H = window.innerHeight;
-
     var availableWidth = scale * W;
     var availableHeight = scale * H;
 
-    var aspect = n * image.naturalWidth / image.naturalHeight;
+    var aspect = image.naturalWidth / image.naturalHeight;
+    if (singlePage) {
+      var _width = Math.floor(availableWidth);
+      var _height = Math.floor(_width / aspect);
+
+      return [_width, _height];
+    }
+
+    var n = 2;
+    aspect = n * image.naturalWidth / image.naturalHeight;
     var height = Math.floor(availableHeight);
     var width = Math.floor(height * aspect);
     if (width > availableWidth) {
@@ -230,7 +236,7 @@
 
     function shapeStyler(s, style) {
       var color = style.color;
-      if (dataset.hover[s]) {
+      if (!isTouching && dataset.hover[s]) {
         if (dataset.selection[s]) return function (ctx) {
           ctx.fillStyle = color;ctx.globalAlpha = 0.5;
         };
@@ -877,6 +883,9 @@
           return rerender();
         }, 10);
       });
+      book.addEventListener("touchstart", function (event) {
+        isTouching = true;
+      });
       book.addEventListener("click", function (event) {
         var hits = Object.keys(dataset.hover).filter(function (k) {
           return dataset.hover[k];
@@ -973,7 +982,7 @@
         book.removeChild(book.firstChild);
       }var canvas = book.appendChild(document.createElement("canvas"));
 
-      var _computeEmbedSize3 = computeEmbedSize(images[0], options.scale),
+      var _computeEmbedSize3 = computeEmbedSize(images[0], options.scale, false),
           _computeEmbedSize4 = _slicedToArray(_computeEmbedSize3, 2),
           W = _computeEmbedSize4[0],
           H = _computeEmbedSize4[1];
@@ -1074,6 +1083,7 @@
             target = render.nearestCorner(mouse);
           }
           animating = true;
+          book.addEventListener("mousemove", trackHighlight);
           return animate(dropAnimation(mouse, target, corner, leftPage, rightPage, leftMap, rightMap, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap), 300).then(function () {
             animating = false;
             if (target !== corner) {
@@ -1117,6 +1127,7 @@
           var onMouseMove = dragCorner(corner);
           document.addEventListener("mousemove", onMouseMove, false);
           document.addEventListener("touchmove", onMouseMove, false);
+          book.removeEventListener("mousemove", trackHighlight);
 
           var onMouseUp = dropCorner(corner, onMouseMove, mouse.timeStamp);
           document.addEventListener("mouseup", onMouseUp, false);
@@ -1133,7 +1144,7 @@
       book.addEventListener("touchstart", function (event) {
         event.preventDefault();animateCorner(render.toLocalCoordinates(event));
       });
-      book.addEventListener("mousemove", function (event) {
+      function trackHighlight(event) {
         var changed = false;
         var newHover = {};
 
@@ -1158,7 +1169,8 @@
           dataset.hover = newHover;
           rerender();
         }
-      });
+      };
+      book.addEventListener("mousemove", trackHighlight);
 
       var timeout = void 0;
       window.addEventListener("scroll", function (event) {
@@ -1166,6 +1178,9 @@
         timeout = setTimeout(function () {
           return rerender();
         }, 10);
+      });
+      book.addEventListener("touchstart", function (event) {
+        isTouching = true;
       });
       book.addEventListener("click", function (event) {
         var hits = Object.keys(dataset.hover).filter(function (k) {
