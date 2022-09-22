@@ -18,7 +18,6 @@
   });
   exports.default = flipper;
 
-  var isTouching = false;
   var _slicedToArray = function () {
     function sliceIterator(arr, i) {
       var _arr = [];
@@ -92,6 +91,8 @@
   }
   window.inferBackgroundColor = inferBackgroundColor;
 
+  var isTouching = false;
+
   function pointInPolygon(x, y, coords) {
     function crosses(x1, y1, x2, y2) {
       if (y1 <= y && y2 > y || y1 > y && y2 <= y) {
@@ -112,30 +113,21 @@
 
   function computeEmbedSize(image, scale, singlePage) {
     if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight, 1];
-
-    if (singlePage) {
-      var W = window.innerWidth;
-      var H = window.innerHeight;
-
-      var availableWidth = scale * W;
-      var availableHeight = scale * H;
-
-      var aspect = image.naturalWidth / image.naturalHeight;
-      var width = Math.floor(availableWidth);
-      var height = Math.floor(width / aspect);
-
-      return [width, height];
-    }
-
-    var n = 2;
-
     var W = window.innerWidth;
     var H = window.innerHeight;
-
     var availableWidth = scale * W;
     var availableHeight = scale * H;
 
-    var aspect = n * image.naturalWidth / image.naturalHeight;
+    var aspect = image.naturalWidth / image.naturalHeight;
+    if (singlePage) {
+      var _width = Math.floor(availableWidth);
+      var _height = Math.floor(_width / aspect);
+
+      return [_width, _height];
+    }
+
+    var n = 2;
+    aspect = n * image.naturalWidth / image.naturalHeight;
     var height = Math.floor(availableHeight);
     var width = Math.floor(height * aspect);
     if (width > availableWidth) {
@@ -699,7 +691,7 @@
     var renderMagnifier = function renderMagnifier(page) {
       var ctx = magCanvas.getContext("2d");
       ctx.save();
-      ctx.clearRect(0, 0, w, h);
+      ctx.clearRect(0, 0, magCanvas.width, magCanvas.height);
       if (page > 0) ctx.drawImage(images[page - 1], 0, 0, w, h);
       if (page < images.length) ctx.drawImage(images[page], w, 0, w, h);
       ctx.restore();
@@ -891,7 +883,9 @@
           return rerender();
         }, 10);
       });
-      book.addEventListener("touchstart", function(event) { isTouching = true; });
+      book.addEventListener("touchstart", function (event) {
+        isTouching = true;
+      });
       book.addEventListener("click", function (event) {
         var hits = Object.keys(dataset.hover).filter(function (k) {
           return dataset.hover[k];
@@ -1145,12 +1139,10 @@
       }
 
       book.addEventListener("mousedown", function (event) {
-        event.preventDefault();
-        animateCorner(render.toLocalCoordinates(event));
+        event.preventDefault();animateCorner(render.toLocalCoordinates(event));
       });
       book.addEventListener("touchstart", function (event) {
-        event.preventDefault();
-        animateCorner(render.toLocalCoordinates(event));
+        event.preventDefault();animateCorner(render.toLocalCoordinates(event));
       });
       function trackHighlight(event) {
         var changed = false;
@@ -1177,7 +1169,7 @@
           dataset.hover = newHover;
           rerender();
         }
-      }
+      };
       book.addEventListener("mousemove", trackHighlight);
 
       var timeout = void 0;
@@ -1187,7 +1179,9 @@
           return rerender();
         }, 10);
       });
-      book.addEventListener("touchstart", function(event) { isTouching = true; });
+      book.addEventListener("touchstart", function (event) {
+        isTouching = true;
+      });
       book.addEventListener("click", function (event) {
         var hits = Object.keys(dataset.hover).filter(function (k) {
           return dataset.hover[k];

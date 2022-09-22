@@ -26,6 +26,8 @@ function inferBackgroundColor(node) {
 }
 window.inferBackgroundColor = inferBackgroundColor;
 
+let isTouching = false
+
 function pointInPolygon(x, y, coords) {
   function crosses(x1, y1, x2, y2) {
     if (y1 <= y && y2 > y || y1 > y && y2 <= y) {
@@ -45,17 +47,23 @@ function pointInPolygon(x, y, coords) {
 }
 
 
-function computeEmbedSize(image, scale, singlePage = false) {
+function computeEmbedSize(image, scale, singlePage) {
   if (scale === null || scale === undefined || scale <= 0) return [image.naturalWidth, image.naturalHeight, 1];
-  const n = singlePage ? 1 : 2;
-
   const W = window.innerWidth;
   const H = window.innerHeight;
-
   const availableWidth = scale * W;
   const availableHeight = scale * H;
 
-  const aspect = (n*image.naturalWidth) / image.naturalHeight;
+  let aspect = image.naturalWidth / image.naturalHeight;
+  if (singlePage) {
+    let width = Math.floor(availableWidth);
+    let height = Math.floor(width / aspect);
+
+    return [width, height];
+  }
+
+  const n = 2
+  aspect = (n*image.naturalWidth) / image.naturalHeight;
   let height = Math.floor(availableHeight);
   let width = Math.floor(height * aspect);
   if (width > availableWidth) {
@@ -143,7 +151,7 @@ function createSinglePageRenderer(canvas, dataset, { width, height, scale }) {
 
   function shapeStyler(s, style) {
     const color = style.color;
-    if (dataset.hover[s]) {
+    if (!isTouching && dataset.hover[s]) {
       if (dataset.selection[s]) return (ctx) => { ctx.fillStyle = color; ctx.globalAlpha = 0.5; };
       return (ctx) => { ctx.fillStyle = color; ctx.globalAlpha = 0.3; };
     }
@@ -504,7 +512,7 @@ function installMagnifier(book, canvas, render, images, W, H, options) {
   const renderMagnifier = (page) => {
     const ctx = magCanvas.getContext("2d");
     ctx.save();
-    ctx.clearRect(0, 0, w, h);
+    ctx.clearRect(0, 0, magCanvas.width, magCanvas.height);
     if (page > 0) ctx.drawImage(images[page - 1], 0, 0, w, h);
     if (page < images.length) ctx.drawImage(images[page], w, 0, w, h);
     ctx.restore();
@@ -657,6 +665,7 @@ function singlePageFlipper(book, page, data, options) {
         if (timeout) clearTimeout(timeout);
         timeout = setTimeout(() => rerender(), 10);
       })
+      book.addEventListener("touchstart", function(event) { isTouching = true })
       book.addEventListener("click", (event) => {
         let hits = Object.keys(dataset.hover).filter((k) => dataset.hover[k]);
         if (hits.length === 0) return;
@@ -800,6 +809,7 @@ export default function flipper(book, pages, data, options = {}) {
             target = render.nearestCorner(mouse);
           }
           animating = true;
+          book.addEventListener("mousemove", trackHighlight)
           return animate(dropAnimation(mouse, target, corner, leftPage, rightPage, leftMap, rightMap, incomingLeftPage, incomingRightPage, incomingLeftMap, incomingRightMap), 300)
             .then(() => {
               animating = false;
@@ -844,6 +854,7 @@ export default function flipper(book, pages, data, options = {}) {
           const onMouseMove = dragCorner(corner);
           document.addEventListener("mousemove", onMouseMove, false);
           document.addEventListener("touchmove", onMouseMove, false);
+          book.removeEventListener("mousemove", trackHighlight)
 
           const onMouseUp = dropCorner(corner, onMouseMove, mouse.timeStamp);
           document.addEventListener("mouseup", onMouseUp, false);
@@ -856,7 +867,7 @@ export default function flipper(book, pages, data, options = {}) {
 
       book.addEventListener("mousedown", (event) => { event.preventDefault(); animateCorner(render.toLocalCoordinates(event)); });
       book.addEventListener("touchstart", (event) => { event.preventDefault(); animateCorner(render.toLocalCoordinates(event)); });
-      book.addEventListener("mousemove", (event) => {
+      function trackHighlight(event) {
         let changed = false;
         const newHover = {};
 
@@ -875,13 +886,15 @@ export default function flipper(book, pages, data, options = {}) {
           dataset.hover = newHover;
           rerender();
         }
-      });
+      };
+      book.addEventListener("mousemove", trackHighlight)
 
       let timeout;
       window.addEventListener("scroll", (event) => {
         if (timeout) clearTimeout(timeout);
         timeout = setTimeout(() => rerender(), 10);
       })
+      book.addEventListener("touchstart", function(event) { isTouching = true })
       book.addEventListener("click", (event) => {
         let hits = Object.keys(dataset.hover).filter((k) => dataset.hover[k]);
         if (hits.length === 0) return;
