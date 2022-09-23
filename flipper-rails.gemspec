@@ -1,5 +1,5 @@
 # -*- encoding: utf-8 -*-
-# stub: flipper-rails 2.4.0 ruby lib
+# stub: flipper-rails 2.4.1 ruby lib
 
 Gem::Specification.new do |s|
   s.name = "flipper-rails"
