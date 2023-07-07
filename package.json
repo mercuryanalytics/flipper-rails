@@ -20,6 +20,8 @@
     "requirejs": "^2.1.22"
   },
   "scripts": {
+    "build": "gulp",
+    "serve": "ruby -run -ehttpd . -p8000",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "resolutions": {
